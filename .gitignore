@@ -9,6 +9,9 @@
 /[Mm]emoryCaptures/
 /[Rr]ecordings/
 
+# 구매한 에셋 원본 zip (재배포 금지 라이선스). 게임에 쓰는 파일만 Assets/ThirdParty로 옮긴다.
+/_imports/
+
 # Asset Store tools
 /[Aa]ssets/AssetStoreTools*
 
