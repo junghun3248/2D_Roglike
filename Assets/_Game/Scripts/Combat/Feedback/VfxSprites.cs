@@ -1,0 +1,41 @@
+using UnityEngine;
+
+namespace Roglike.Combat
+{
+    /// <summary>
+    /// 자리표시 이펙트용 공용 스프라이트·머티리얼. 씬의 VfxSprites 컴포넌트가 에셋을 넘겨준다.
+    /// 아트가 들어오면 이펙트별 프리팹으로 교체한다.
+    /// </summary>
+    public class VfxSprites : MonoBehaviour
+    {
+        [SerializeField] private Sprite _square;
+        [SerializeField] private Sprite _circle;
+        [SerializeField] private Material _material;
+
+        public static Sprite Square { get; private set; }
+        public static Sprite Circle { get; private set; }
+        public static Material Material { get; private set; }
+
+        private void Awake()
+        {
+            Square = _square;
+            Circle = _circle;
+            Material = _material;
+        }
+
+        public static SpriteRenderer CreateRenderer(string name, Sprite sprite, Color color, int sortingOrder)
+        {
+            var go = new GameObject(name);
+            var renderer = go.AddComponent<SpriteRenderer>();
+            renderer.sprite = sprite;
+            renderer.color = color;
+            renderer.sortingOrder = sortingOrder;
+            if (Material != null)
+            {
+                renderer.sharedMaterial = Material;
+            }
+
+            return renderer;
+        }
+    }
+}
