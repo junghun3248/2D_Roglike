@@ -75,6 +75,8 @@ namespace Roglike.Tests
             InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
             InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
             var keyboard = InputSystem.AddDevice<Keyboard>("CaptureKeyboard");
+            Roglike.Progression.MetaProgression.SavePathOverride = Path.Combine(directory, "meta_capture.json");
+            Roglike.Progression.MetaProgression.ResetData();
 
             SceneManager.LoadScene("Run");
             yield return new WaitForSecondsRealtime(0.2f);
@@ -85,25 +87,30 @@ namespace Roglike.Tests
 
             var choice = UnityEngine.Object.FindFirstObjectByType<Roglike.UI.UpgradeChoiceUI>();
             var run = UnityEngine.Object.FindFirstObjectByType<Roglike.Run.RunManager>();
-            for (int room = 0; room < run.RoomCount - 1; room++)
+            int picks = 0;
+            float elapsed = 0f;
+            while (!run.IsBossRoom && elapsed < 150f)
             {
-                float waited = 0f;
-                while (!choice.IsOpen && waited < 40f)
+                if (choice.IsOpen)
                 {
-                    KillEnemies();
-                    waited += 0.2f;
-                    yield return new WaitForSecondsRealtime(0.2f);
+                    yield return new WaitForSecondsRealtime(0.6f);
+                    if (picks == 0)
+                    {
+                        yield return CaptureScreen(directory, "5_upgrade_choice");
+                    }
+
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit1));
+                    yield return new WaitForSecondsRealtime(0.1f);
+                    InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                    yield return new WaitForSecondsRealtime(0.1f);
+                    picks++;
+                    elapsed += 0.8f;
+                    continue;
                 }
 
-                yield return new WaitForSecondsRealtime(0.6f);
-                if (room == 0)
-                {
-                    yield return CaptureScreen(directory, "5_upgrade_choice");
-                }
-
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit1));
-                yield return new WaitForSecondsRealtime(0.1f);
-                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+                KillEnemies();
+                elapsed += 0.2f;
+                yield return new WaitForSecondsRealtime(0.2f);
             }
 
             yield return new WaitForSecondsRealtime(4f);
@@ -117,7 +124,14 @@ namespace Roglike.Tests
             yield return new WaitForSecondsRealtime(4f);
             yield return CaptureScreen(directory, "7_result");
 
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.J));
+            yield return new WaitForSecondsRealtime(0.1f);
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            yield return new WaitForSecondsRealtime(0.8f);
+            yield return CaptureScreen(directory, "8_meta_shop");
+
             InputSystem.RemoveDevice(keyboard);
+            Roglike.Progression.MetaProgression.SavePathOverride = null;
             Time.timeScale = 1f;
         }
 

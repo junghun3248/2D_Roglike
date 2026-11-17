@@ -22,6 +22,8 @@ namespace Roglike.Run
         [Header("Config")]
         [SerializeField] private RunConfig _config;
         [SerializeField] private UpgradeData[] _upgrades;
+        [SerializeField] private SynergyData[] _synergies;
+        [SerializeField] private MetaUpgradeData[] _metaUpgrades;
 
         [Header("Scene")]
         [SerializeField] private PlayerStats _player;
@@ -34,6 +36,8 @@ namespace Roglike.Run
         [SerializeField] private BossHealthBar _bossBar;
         [SerializeField] private ScreenFader _fader;
         [SerializeField] private RunResultScreen _result;
+        [SerializeField] private SynergyPanelUI _synergyPanel;
+        [SerializeField] private MetaShopUI _metaShop;
 
         [Header("Timing (실시간 초)")]
         [SerializeField] private float _roomIntroDelay = 0.6f;
@@ -51,6 +55,11 @@ namespace Roglike.Run
         private bool _bossDefeated;
         private bool _ended;
         private int _upgradesTaken;
+        private int _rerollsLeft;
+        private SynergyTracker _synergy;
+
+        public SynergyTracker Synergy => _synergy;
+        public int CrystalsEarned { get; private set; }
 
         /// <summary>HUD 갱신용.</summary>
         public event Action Changed;
@@ -102,7 +111,20 @@ namespace Roglike.Run
                 return;
             }
 
+            // 영구 성장 → 런 시작 능력치, 시너지 추적 시작.
+            MetaProgression.ApplyTo(_player, _metaUpgrades ?? Array.Empty<MetaUpgradeData>());
+            _rerollsLeft = Mathf.Max(0, Mathf.RoundToInt(_player.Get(StatType.Rerolls)));
+            _synergy = new SynergyTracker(_player, _synergies ?? Array.Empty<SynergyData>());
+            _synergyPanel?.Bind(_synergy);
+            _upgradeChoice?.SetTagStyle(TagStyle);
+
             _loop = StartCoroutine(RunLoop());
+        }
+
+        private (string name, Color color) TagStyle(UpgradeTag tag)
+        {
+            SynergyData data = _synergy?.Get(tag);
+            return data != null ? (data.displayName, data.color) : (tag.ToString(), Color.white);
         }
 
         private void Update()
@@ -156,8 +178,9 @@ namespace Roglike.Run
         private IEnumerator FightRoom(RoomEntry room)
         {
             float healthScale = Mathf.Pow(_config.enemyHealthGrowth, RoomIndex);
-            foreach (WaveEntry wave in room.waves)
+            for (int waveIndex = 0; waveIndex < room.waves.Length; waveIndex++)
             {
+                WaveEntry wave = room.waves[waveIndex];
                 if (wave?.enemyPrefab == null)
                 {
                     continue;
@@ -175,6 +198,13 @@ namespace Roglike.Run
                 }
 
                 yield return new WaitForSecondsRealtime(_waveDelay);
+
+                // 마지막 웨이브 뒤에는 구역 클리어 보상으로 고르므로 여기선 건너뛴다.
+                bool lastWave = waveIndex == room.waves.Length - 1;
+                if (_config.upgradeAfterEveryWave && !lastWave)
+                {
+                    yield return ChooseUpgrade();
+                }
             }
         }
 
@@ -202,18 +232,22 @@ namespace Roglike.Run
 
             UpgradeData chosen = null;
             SetGameplayPaused(true);
-            _upgradeChoice.Show(options, _pool.Stacks, upgrade => chosen = upgrade);
+            _upgradeChoice.Show(options, _pool.Stacks, upgrade => chosen = upgrade,
+                () => _pool.Roll(_config.upgradeChoices), _rerollsLeft);
             while (chosen == null)
             {
                 yield return null;
             }
 
+            _rerollsLeft = _upgradeChoice.RerollsLeft;
             _pool.Take(chosen);
             _upgradesTaken++;
             if (chosen.modifiers != null)
             {
                 _player.AddModifiers(chosen.modifiers);
             }
+
+            _synergy.Add(chosen);
 
             SetGameplayPaused(false);
             Changed?.Invoke();
@@ -353,12 +387,28 @@ namespace Roglike.Run
             _bossBar?.Hide();
             SetGameplayPaused(true);
             var summary = new RunSummary(victory, ElapsedSeconds, RoomIndex + 1, RoomCount, Kills, HighestHit, _upgradesTaken);
+            CrystalsEarned = MetaProgression.AwardRun(summary);
             Changed?.Invoke();
             if (_result != null)
             {
-                _result.Show(summary, Restart);
+                _result.Show(summary, CrystalsEarned, OpenShopOrRestart);
             }
         }
+
+        /// <summary>결과 화면 다음: 강화소(영구 성장)에서 결정을 쓰고 다음 런 출발.</summary>
+        private void OpenShopOrRestart()
+        {
+            if (_metaShop != null && _metaUpgrades != null && _metaUpgrades.Length > 0)
+            {
+                _metaShop.Show(_metaUpgrades, CrystalsEarned, Restart);
+            }
+            else
+            {
+                Restart();
+            }
+        }
+
+        public int RerollsLeft => _rerollsLeft;
 
         public void Restart()
         {

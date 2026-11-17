@@ -28,6 +28,8 @@ namespace Roglike.Progression
         OverdriveGain,
         /// <summary>오버드라이브 지속 시간(초). 기본 5.</summary>
         OverdriveDuration,
+        /// <summary>런 한 판에서 강화 선택지를 다시 뽑을 수 있는 횟수. 기본 1.</summary>
+        Rerolls,
     }
 
     public enum ModifierKind

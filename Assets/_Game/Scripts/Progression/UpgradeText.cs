@@ -27,6 +27,7 @@ namespace Roglike.Progression
                 text.Append(value.ToString("+0.##;-0.##;+0", CultureInfo.InvariantCulture));
                 if (percent) text.Append('%');
                 else if (modifier.stat == StatType.OverdriveDuration) text.Append("초");
+                else if (modifier.stat == StatType.Rerolls) text.Append("회");
             }
 
             return text.ToString();
@@ -46,6 +47,7 @@ namespace Roglike.Progression
                 case StatType.MaxHealth: return "최대 체력";
                 case StatType.OverdriveGain: return "오버드라이브 충전";
                 case StatType.OverdriveDuration: return "오버드라이브 지속";
+                case StatType.Rerolls: return "강화 다시 뽑기";
                 default: return stat.ToString();
             }
         }

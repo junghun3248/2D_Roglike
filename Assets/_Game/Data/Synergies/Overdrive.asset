@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28b766d95f181547bfb4ace3856728e, type: 3}
+  m_Name: Overdrive
+  m_EditorClassIdentifier: Roglike::Roglike.Data.SynergyData
+  tag: 4
+  displayName: "\uACFC\uBD80\uD558"
+  color: {r: 0.8, g: 0.4, b: 1, a: 1}
+  tiers:
+  - threshold: 2
+    modifiers:
+    - stat: 8
+      kind: 1
+      value: 0.3
+  - threshold: 4
+    modifiers:
+    - stat: 8
+      kind: 1
+      value: 0.6
+    - stat: 9
+      kind: 0
+      value: 1
+  - threshold: 6
+    modifiers:
+    - stat: 8
+      kind: 1
+      value: 1
+    - stat: 9
+      kind: 0
+      value: 2
+    - stat: 2
+      kind: 2
+      value: 1.15

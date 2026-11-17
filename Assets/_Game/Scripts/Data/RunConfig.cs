@@ -35,5 +35,7 @@ namespace Roglike.Data
         [Tooltip("구역 클리어 시 최대 체력 대비 회복 비율")]
         [Range(0f, 1f)] public float healOnRoomClear = 0.25f;
         public int upgradeChoices = 3;
+        [Tooltip("켜면 구역 클리어뿐 아니라 웨이브를 정리할 때마다 강화를 고른다 (시너지를 모을 기회를 늘림)")]
+        public bool upgradeAfterEveryWave = true;
     }
 }

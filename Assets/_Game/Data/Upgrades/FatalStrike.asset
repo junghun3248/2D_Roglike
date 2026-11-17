@@ -16,6 +16,7 @@ MonoBehaviour:
   description: 
   rarity: 1
   maxStacks: 3
+  tags: 01000000
   modifiers:
   - stat: 4
     kind: 0

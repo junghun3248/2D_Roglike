@@ -17,6 +17,8 @@ namespace Roglike.Progression
         [SerializeField] private float _overdriveDuration = 5f;
 
         private readonly List<StatModifier> _modifiers = new List<StatModifier>();
+        // 출처별 수정치 (시너지 단계, 영구 성장 등). 출처 단위로 통째로 교체·제거한다.
+        private readonly Dictionary<object, StatModifier[]> _sourced = new Dictionary<object, StatModifier[]>();
         private readonly float[] _cache = new float[Enum.GetValues(typeof(StatType)).Length];
         private bool _dirty = true;
 
@@ -67,8 +69,50 @@ namespace Roglike.Progression
             Changed?.Invoke();
         }
 
+        /// <summary>
+        /// 출처(source)의 수정치를 통째로 설정한다. 같은 출처로 다시 부르면 이전 값을 대체한다.
+        /// 시너지 단계 변경·영구 성장 적용에 쓴다.
+        /// </summary>
+        public void SetModifiers(object source, IEnumerable<StatModifier> modifiers)
+        {
+            if (source == null)
+            {
+                throw new ArgumentNullException(nameof(source));
+            }
+
+            var list = new List<StatModifier>();
+            if (modifiers != null)
+            {
+                list.AddRange(modifiers);
+            }
+
+            if (list.Count == 0)
+            {
+                _sourced.Remove(source);
+            }
+            else
+            {
+                _sourced[source] = list.ToArray();
+            }
+
+            _dirty = true;
+            ApplyMaxHealth();
+            Changed?.Invoke();
+        }
+
+        public void RemoveModifiers(object source)
+        {
+            if (source != null && _sourced.Remove(source))
+            {
+                _dirty = true;
+                ApplyMaxHealth();
+                Changed?.Invoke();
+            }
+        }
+
         public void ClearModifiers()
         {
+            _sourced.Clear();
             _modifiers.Clear();
             _dirty = true;
             ApplyMaxHealth();
@@ -97,6 +141,22 @@ namespace Roglike.Progression
             }
         }
 
+        private IEnumerable<StatModifier> AllModifiers()
+        {
+            foreach (StatModifier modifier in _modifiers)
+            {
+                yield return modifier;
+            }
+
+            foreach (StatModifier[] modifiers in _sourced.Values)
+            {
+                foreach (StatModifier modifier in modifiers)
+                {
+                    yield return modifier;
+                }
+            }
+        }
+
         private void Recalculate()
         {
             int count = _cache.Length;
@@ -108,7 +168,7 @@ namespace Roglike.Progression
                 multiply[i] = 1f;
             }
 
-            foreach (StatModifier modifier in _modifiers)
+            foreach (StatModifier modifier in AllModifiers())
             {
                 int index = (int)modifier.stat;
                 switch (modifier.kind)

@@ -1,0 +1,42 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: e28b766d95f181547bfb4ace3856728e, type: 3}
+  m_Name: Tempo
+  m_EditorClassIdentifier: Roglike::Roglike.Data.SynergyData
+  tag: 2
+  displayName: "\uC9C8\uD48D"
+  color: {r: 0.2, g: 1, b: 0.7, a: 1}
+  tiers:
+  - threshold: 2
+    modifiers:
+    - stat: 5
+      kind: 1
+      value: 0.1
+    - stat: 6
+      kind: 1
+      value: 0.05
+  - threshold: 4
+    modifiers:
+    - stat: 5
+      kind: 1
+      value: 0.25
+    - stat: 6
+      kind: 1
+      value: 0.1
+  - threshold: 6
+    modifiers:
+    - stat: 5
+      kind: 1
+      value: 0.45
+    - stat: 6
+      kind: 1
+      value: 0.15

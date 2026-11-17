@@ -112,6 +112,8 @@ namespace Roglike.EditorTools
             GameObject slimePrefab = EnsureSlimePrefab();
             GameObject bossPrefab = EnsureBossPrefab(slimePrefab);
             UpgradeData[] upgrades = UpgradeLibraryBuilder.EnsureDefaultUpgrades();
+            SynergyData[] synergies = SynergyLibraryBuilder.EnsureDefaultSynergies();
+            MetaUpgradeData[] metaUpgrades = MetaLibraryBuilder.EnsureDefaultMetaUpgrades();
             RunConfig config = EnsureRunConfig(slimePrefab, bossPrefab);
 
             GameObject player = CreatePlayer(combo);
@@ -150,6 +152,8 @@ namespace Roglike.EditorTools
             var bossBar = ui.AddComponent<BossHealthBar>();
             var fader = ui.AddComponent<ScreenFader>();
             var result = ui.AddComponent<RunResultScreen>();
+            var synergyPanel = ui.AddComponent<SynergyPanelUI>();
+            var metaShop = ui.AddComponent<MetaShopUI>();
 
             var run = runObject.AddComponent<RunManager>();
             SetObject(run, "_config", config);
@@ -162,6 +166,10 @@ namespace Roglike.EditorTools
             SetObject(run, "_bossBar", bossBar);
             SetObject(run, "_fader", fader);
             SetObject(run, "_result", result);
+            SetObjectArray(run, "_synergies", synergies);
+            SetObjectArray(run, "_metaUpgrades", metaUpgrades);
+            SetObject(run, "_synergyPanel", synergyPanel);
+            SetObject(run, "_metaShop", metaShop);
 
             var hud = ui.AddComponent<RunHud>();
             SetObject(hud, "_run", run);

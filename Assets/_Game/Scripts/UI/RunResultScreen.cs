@@ -35,7 +35,8 @@ namespace Roglike.UI
 
             _body = UiFactory.CreateText("Body", canvas.transform, 38, new Color(1f, 1f, 1f, 0.92f), TextAnchor.MiddleCenter);
             _body.lineSpacing = 1.3f;
-            Place(_body, new Vector2(0f, -10f), new Vector2(1200f, 360f));
+            Place(_body, new Vector2(0f, -20f), new Vector2(1200f, 440f));
+            _body.supportRichText = true;
 
             _hint = UiFactory.CreateText("Hint", canvas.transform, 30, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Place(_hint, new Vector2(0f, -300f), new Vector2(1200f, 60f));
@@ -54,6 +55,13 @@ namespace Roglike.UI
         private void OnDestroy()
         {
             _confirm?.Dispose();
+        }
+
+        public void Show(RunSummary summary, int crystalsEarned, Action onContinue)
+        {
+            Show(summary, onContinue);
+            _body.text += $"\n\n<color=#7FE3FF>결정 +{NumberFormat.ToKorean(crystalsEarned)}</color>";
+            _hint.text = "J / Space / Enter  계속 (강화소)";
         }
 
         public void Show(RunSummary summary, Action onRestart)

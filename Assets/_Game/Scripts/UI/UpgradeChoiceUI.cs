@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Text;
 using Roglike.Data;
 using Roglike.Progression;
 using UnityEngine;
@@ -20,16 +21,22 @@ namespace Roglike.UI
         private readonly Image[] _frames = new Image[3];
         private readonly Text[] _rarities = new Text[3];
         private readonly Text[] _names = new Text[3];
+        private readonly Text[] _tags = new Text[3];
         private readonly Text[] _descriptions = new Text[3];
         private readonly Text[] _stackTexts = new Text[3];
         private readonly Color[] _colors = new Color[3];
         private GameObject _root;
         private InputActionMap _actions;
         private Action<UpgradeData> _onChosen;
+        private Func<UpgradeData, int> _stacks;
+        private Func<IReadOnlyList<UpgradeData>> _reroll;
+        private Func<UpgradeTag, (string name, Color color)> _tagStyle;
+        private Text _hint;
         private int _selected;
         private float _shownAt;
 
         public bool IsOpen { get; private set; }
+        public int RerollsLeft { get; private set; }
 
         private void Awake()
         {
@@ -39,11 +46,12 @@ namespace Roglike.UI
             UiFactory.Stretch(dim.rectTransform);
             CreateLabel("Title", canvas.transform, "강화 선택", 56, Color.white,
                 new Vector2(0f, 370f), new Vector2(1000f, 90f));
-            CreateLabel("Hint", canvas.transform, "← → 선택 · J / Space / Enter 결정 · 1 2 3 바로 선택",
-                28, Color.white, new Vector2(0f, -370f), new Vector2(1600f, 70f));
+            _hint = CreateLabel("Hint", canvas.transform, "",
+                28, Color.white, new Vector2(0f, -370f), new Vector2(1600f, 100f));
             for (int i = 0; i < _cards.Length; i++) BuildCard(i, canvas.transform);
 
             _actions = new InputActionMap("UpgradeChoice");
+            AddButton("Reroll", Reroll, "<Keyboard>/r", "<Gamepad>/buttonNorth");
             AddButton("Left", () => Move(-1), "<Keyboard>/leftArrow", "<Keyboard>/a", "<Gamepad>/dpad/left");
             AddButton("Right", () => Move(1), "<Keyboard>/rightArrow", "<Keyboard>/d", "<Gamepad>/dpad/right");
             AddButton("Confirm", () => Choose(_selected), "<Keyboard>/j", "<Keyboard>/space",
@@ -58,20 +66,60 @@ namespace Roglike.UI
         }
 
         /// <summary>호출 측에서 게임 일시정지·재개 및 선택한 강화 적용을 담당한다.</summary>
-        public void Show(IReadOnlyList<UpgradeData> options, Func<UpgradeData, int> stacks, Action<UpgradeData> onChosen)
+        public void Show(IReadOnlyList<UpgradeData> options, Func<UpgradeData, int> stacks,
+            Action<UpgradeData> onChosen, Func<IReadOnlyList<UpgradeData>> reroll = null, int rerollsLeft = 0)
         {
             Hide();
+            RerollsLeft = Mathf.Max(0, rerollsLeft);
             if (!isActiveAndEnabled || options == null) return;
-            _options.Clear();
-            for (int i = 0; i < options.Count && _options.Count < 3; i++)
-            {
-                if (options[i] != null) _options.Add(options[i]);
-            }
+            ReplaceOptions(options);
             if (_options.Count == 0) return;
 
             _selected = 0;
-            _shownAt = Time.unscaledTime;
             _onChosen = onChosen;
+            _stacks = stacks;
+            _reroll = reroll;
+            RefreshCards();
+            IsOpen = true;
+            _root.SetActive(true);
+            _actions.Enable();
+        }
+
+        public void SetTagStyle(Func<UpgradeTag, (string name, Color color)> style)
+        {
+            _tagStyle = style;
+            if (!IsOpen) return;
+            for (int i = 0; i < _options.Count; i++) _tags[i].text = DescribeTags(_options[i]);
+        }
+
+        private void ReplaceOptions(IReadOnlyList<UpgradeData> options)
+        {
+            _options.Clear();
+            if (options == null) return;
+            for (int i = 0; i < options.Count && _options.Count < _cards.Length; i++)
+                if (options[i] != null) _options.Add(options[i]);
+        }
+
+        private void Reroll()
+        {
+            if (_reroll == null || RerollsLeft <= 0) return;
+            IReadOnlyList<UpgradeData> options = _reroll();
+            RerollsLeft--;
+            bool hasOption = false;
+            if (options != null)
+            {
+                for (int i = 0; i < options.Count; i++)
+                    if (options[i] != null) { hasOption = true; break; }
+            }
+            // 잘못된 빈 결과로 선택 창에 갇히지 않도록 기존 선택지를 유지한다.
+            if (hasOption) ReplaceOptions(options);
+            _selected = Mathf.Clamp(_selected, 0, _options.Count - 1);
+            RefreshCards();
+        }
+
+        private void RefreshCards()
+        {
+            _shownAt = Time.unscaledTime;
             for (int i = 0; i < _cards.Length; i++)
             {
                 _cards[i].gameObject.SetActive(i < _options.Count);
@@ -83,15 +131,30 @@ namespace Roglike.UI
                 _rarities[i].color = _colors[i];
                 _rarities[i].text = RarityName(upgrade.rarity);
                 _names[i].text = upgrade.displayName;
+                _tags[i].text = DescribeTags(upgrade);
                 _descriptions[i].text = string.IsNullOrWhiteSpace(upgrade.description)
                     ? UpgradeText.Describe(upgrade.modifiers) : upgrade.description;
-                _stackTexts[i].text = $"(현재 {stacks?.Invoke(upgrade) ?? 0} / 최대 {upgrade.maxStacks})";
+                _stackTexts[i].text = $"(현재 {_stacks?.Invoke(upgrade) ?? 0} / 최대 {upgrade.maxStacks})";
             }
 
-            IsOpen = true;
-            _root.SetActive(true);
+            _hint.text = "← → 선택 · J / Space / Enter 결정 · 1 2 3 바로 선택";
+            if (_reroll != null && RerollsLeft > 0)
+                _hint.text += $"\nR 다시 뽑기 (남은 {RerollsLeft}회) · 패드 Y / △";
             RefreshFrames();
-            _actions.Enable();
+        }
+
+        private string DescribeTags(UpgradeData upgrade)
+        {
+            if (upgrade.tags == null) return string.Empty;
+            var text = new StringBuilder();
+            foreach (UpgradeTag tag in upgrade.tags)
+            {
+                if (text.Length > 0) text.Append(" · ");
+                (string name, Color color) style = _tagStyle != null ? _tagStyle(tag) : (tag.ToString(), Color.white);
+                text.Append("<color=#").Append(ColorUtility.ToHtmlStringRGBA(style.color)).Append('>')
+                    .Append(style.name).Append("</color>");
+            }
+            return text.ToString();
         }
 
         private void Update()
@@ -121,8 +184,11 @@ namespace Roglike.UI
                 new Vector2(0f, 207f), new Vector2(360f, 42f));
             _names[index] = CreateLabel("Name", card, "", 38, Color.white,
                 new Vector2(0f, 130f), new Vector2(364f, 100f));
+            _tags[index] = CreateLabel("Tags", card, "", 22, Color.white,
+                new Vector2(0f, 65f), new Vector2(364f, 36f));
+            _tags[index].supportRichText = true;
             _descriptions[index] = CreateLabel("Description", card, "", 27, Color.white,
-                new Vector2(0f, -20f), new Vector2(364f, 190f));
+                new Vector2(0f, -40f), new Vector2(364f, 160f));
             _stackTexts[index] = CreateLabel("Stacks", card, "", 24, new Color(0.8f, 0.83f, 0.9f),
                 new Vector2(0f, -160f), new Vector2(364f, 42f));
             CreateLabel("Key", card, $"[{index + 1}]", 30, Color.white,
@@ -181,6 +247,8 @@ namespace Roglike.UI
         {
             IsOpen = false;
             _onChosen = null;
+            _stacks = null;
+            _reroll = null;
             _actions?.Disable();
             if (_root != null) _root.SetActive(false);
         }
