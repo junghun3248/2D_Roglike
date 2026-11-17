@@ -1,6 +1,7 @@
 using System;
 using Roglike.Combat;
 using Roglike.Core;
+using Roglike.Progression;
 using UnityEngine;
 
 namespace Roglike.Player
@@ -28,19 +29,22 @@ namespace Roglike.Player
         private float _gauge;
         private float _remaining;
         private float _afterimageTimer;
+        private float _activeDuration = 1f;
+        private PlayerStats _stats;
 
         public event Action<bool> ActiveChanged;
 
         public bool IsActive { get; private set; }
         public bool IsReady => !IsActive && _gauge >= _maxGauge;
         /// <summary>발동 중이면 남은 시간 비율, 아니면 충전 비율.</summary>
-        public float Gauge01 => IsActive ? _remaining / _duration : _gauge / _maxGauge;
+        public float Gauge01 => IsActive ? _remaining / _activeDuration : _gauge / _maxGauge;
         public float DamageMultiplier => IsActive ? _damageMultiplier : 1f;
 
         private void Awake()
         {
             _input = GetComponent<PlayerInputReader>();
             _controller = GetComponent<PlayerController>();
+            _stats = GetComponent<PlayerStats>();
             _gauge = _startFull ? _maxGauge : 0f;
         }
 
@@ -59,8 +63,11 @@ namespace Roglike.Player
                 return;
             }
 
-            _gauge = Mathf.Min(_maxGauge, _gauge + amount);
+            float gain = _stats != null ? _stats.Get(StatType.OverdriveGain) : 1f;
+            _gauge = Mathf.Min(_maxGauge, _gauge + amount * gain);
         }
+
+        private float Duration => _stats != null ? Mathf.Max(0.5f, _stats.Get(StatType.OverdriveDuration)) : _duration;
 
         private void Update()
         {
@@ -74,7 +81,8 @@ namespace Roglike.Player
                 return;
             }
 
-            bool frozen = TimeController.Instance != null && TimeController.Instance.IsHitStopped;
+            bool frozen = TimeController.Instance != null
+                && (TimeController.Instance.IsHitStopped || TimeController.Instance.IsPaused);
             if (!frozen)
             {
                 _remaining -= Time.unscaledDeltaTime;
@@ -97,7 +105,8 @@ namespace Roglike.Player
         {
             IsActive = true;
             _gauge = 0f;
-            _remaining = _duration;
+            _activeDuration = Duration;
+            _remaining = _activeDuration;
             _afterimageTimer = 0f;
             TimeController.Instance?.SetOverdriveScale(_worldTimeScale);
             TimeController.Instance?.HitStop(0.12f);

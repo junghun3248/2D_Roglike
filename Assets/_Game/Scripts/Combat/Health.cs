@@ -46,6 +46,11 @@ namespace Roglike.Combat
             _invulnerableUntil = Mathf.Max(_invulnerableUntil, Time.time + seconds);
         }
 
+        public void ClearInvulnerable()
+        {
+            _invulnerableUntil = 0f;
+        }
+
         /// <summary>피해를 적용한다. 죽었거나 무적이면 false.</summary>
         public bool TryApplyDamage(DamageInfo info)
         {
@@ -66,6 +71,15 @@ namespace Roglike.Combat
             }
 
             return true;
+        }
+
+        /// <summary>최대 체력 변경. 늘어난 만큼 현재 체력도 채운다 (줄면 현재 체력을 최대치로 자른다).</summary>
+        public void SetMax(double maxHealth)
+        {
+            double delta = maxHealth - _maxHealth;
+            _maxHealth = Math.Max(1, maxHealth);
+            _current = Math.Min(_maxHealth, _current + Math.Max(0, delta));
+            Changed?.Invoke();
         }
 
         public void Heal(double amount)

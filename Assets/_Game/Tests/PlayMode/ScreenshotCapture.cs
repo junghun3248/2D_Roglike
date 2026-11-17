@@ -61,6 +61,108 @@ namespace Roglike.Tests
             Debug.Log("[Roglike] Screenshots saved to " + directory);
         }
 
+        /// <summary>Run 씬: 강화 선택 화면, 보스전, 결과 화면 (오버레이 UI 포함 전체 화면 캡처).</summary>
+        [UnityTest]
+        public IEnumerator CaptureRunMoments()
+        {
+            string directory = Environment.GetEnvironmentVariable("ROGLIKE_SCREENSHOT_DIR");
+            if (string.IsNullOrEmpty(directory))
+            {
+                directory = Path.Combine(Application.temporaryCachePath, "Screenshots");
+            }
+
+            Directory.CreateDirectory(directory);
+            InputSystem.settings.backgroundBehavior = InputSettings.BackgroundBehavior.IgnoreFocus;
+            InputSystem.settings.editorInputBehaviorInPlayMode = InputSettings.EditorInputBehaviorInPlayMode.AllDeviceInputAlwaysGoesToGameView;
+            var keyboard = InputSystem.AddDevice<Keyboard>("CaptureKeyboard");
+
+            SceneManager.LoadScene("Run");
+            yield return new WaitForSecondsRealtime(0.2f);
+            var playerHealth = UnityEngine.Object.FindFirstObjectByType<Roglike.Progression.PlayerStats>().GetComponent<Roglike.Combat.Health>();
+            playerHealth.SetInvulnerable(10000f);
+            yield return new WaitForSecondsRealtime(2.5f);
+            yield return CaptureScreen(directory, "4_run_room1");
+
+            var choice = UnityEngine.Object.FindFirstObjectByType<Roglike.UI.UpgradeChoiceUI>();
+            var run = UnityEngine.Object.FindFirstObjectByType<Roglike.Run.RunManager>();
+            for (int room = 0; room < run.RoomCount - 1; room++)
+            {
+                float waited = 0f;
+                while (!choice.IsOpen && waited < 40f)
+                {
+                    KillEnemies();
+                    waited += 0.2f;
+                    yield return new WaitForSecondsRealtime(0.2f);
+                }
+
+                yield return new WaitForSecondsRealtime(0.6f);
+                if (room == 0)
+                {
+                    yield return CaptureScreen(directory, "5_upgrade_choice");
+                }
+
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit1));
+                yield return new WaitForSecondsRealtime(0.1f);
+                InputSystem.QueueStateEvent(keyboard, new KeyboardState());
+            }
+
+            yield return new WaitForSecondsRealtime(4f);
+            var boss = UnityEngine.Object.FindFirstObjectByType<BossSlime>();
+            var bossHealth = boss.GetComponent<Roglike.Combat.Health>();
+            bossHealth.TryApplyDamage(new Roglike.Combat.DamageInfo(bossHealth.Max * 0.55, true, boss.transform.position, Vector2.zero, 0f, null));
+            yield return new WaitForSecondsRealtime(0.25f);
+            yield return CaptureScreen(directory, "6_boss");
+
+            bossHealth.TryApplyDamage(new Roglike.Combat.DamageInfo(bossHealth.Max, true, boss.transform.position, Vector2.zero, 0f, null));
+            yield return new WaitForSecondsRealtime(4f);
+            yield return CaptureScreen(directory, "7_result");
+
+            InputSystem.RemoveDevice(keyboard);
+            Time.timeScale = 1f;
+        }
+
+        private static void KillEnemies()
+        {
+            foreach (var health in UnityEngine.Object.FindObjectsByType<Roglike.Combat.Health>(FindObjectsSortMode.None))
+            {
+                if (health.Team == Roglike.Combat.Team.Enemy && !health.IsDead && health.GetComponent<BossSlime>() == null)
+                {
+                    health.TryApplyDamage(new Roglike.Combat.DamageInfo(health.Current * 0.999 + 1, true, health.transform.position, Vector2.zero, 0f, null));
+                }
+            }
+        }
+
+        /// <summary>
+        /// 배치 모드에선 화면 캡처(WaitForEndOfFrame)가 동작하지 않으므로, 오버레이 캔버스를 잠시
+        /// 카메라 렌더 방식으로 바꿔 카메라 렌더에 UI까지 담는다.
+        /// </summary>
+        private static IEnumerator CaptureScreen(string directory, string name)
+        {
+            Camera camera = Camera.main;
+            Canvas[] canvases = UnityEngine.Object.FindObjectsByType<Canvas>(FindObjectsSortMode.None);
+            var switched = new System.Collections.Generic.List<Canvas>();
+            foreach (Canvas canvas in canvases)
+            {
+                if (canvas.isRootCanvas && canvas.renderMode == RenderMode.ScreenSpaceOverlay && canvas.gameObject.activeInHierarchy)
+                {
+                    canvas.renderMode = RenderMode.ScreenSpaceCamera;
+                    canvas.worldCamera = camera;
+                    canvas.planeDistance = 1f;
+                    switched.Add(canvas);
+                }
+            }
+
+            Canvas.ForceUpdateCanvases();
+            Capture(directory, name);
+
+            foreach (Canvas canvas in switched)
+            {
+                canvas.renderMode = RenderMode.ScreenSpaceOverlay;
+            }
+
+            yield return null;
+        }
+
         private static void Capture(string directory, string name)
         {
             var overdrive = UnityEngine.Object.FindFirstObjectByType<OverdriveController>();

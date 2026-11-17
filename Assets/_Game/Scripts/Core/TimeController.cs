@@ -26,6 +26,15 @@ namespace Roglike.Core
 
         public bool IsHitStopped => Time.unscaledTime < _hitStopUntil;
 
+        /// <summary>강화 선택·결과 화면 등에서 게임을 완전히 멈춘다. 다른 시간 효과보다 우선.</summary>
+        public bool IsPaused { get; private set; }
+
+        public void SetPaused(bool paused)
+        {
+            IsPaused = paused;
+            Apply();
+        }
+
         private void Awake()
         {
             if (Instance != null && Instance != this)
@@ -84,7 +93,7 @@ namespace Roglike.Core
 
         private void Apply()
         {
-            if (IsHitStopped)
+            if (IsPaused || IsHitStopped)
             {
                 Time.timeScale = 0f;
                 return;

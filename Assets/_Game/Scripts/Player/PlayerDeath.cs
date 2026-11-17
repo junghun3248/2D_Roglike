@@ -10,6 +10,8 @@ namespace Roglike.Player
     public class PlayerDeath : MonoBehaviour
     {
         [SerializeField] private float _restartDelay = 1.5f;
+        [Tooltip("끄면 씬을 다시 불러오지 않는다 (런 씬에서는 RunManager가 결과 화면을 띄운다)")]
+        [SerializeField] private bool _restartOnDeath = true;
 
         private Health _health;
 
@@ -46,7 +48,10 @@ namespace Roglike.Player
             }
 
             HitSpark.Spawn(transform.position, new Color(0.5f, 0.85f, 1f), 20, 12f, 0.3f);
-            StartCoroutine(RestartAfterDelay());
+            if (_restartOnDeath)
+            {
+                StartCoroutine(RestartAfterDelay());
+            }
         }
 
         private IEnumerator RestartAfterDelay()

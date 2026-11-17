@@ -1,0 +1,48 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 7406b9efc52682d4d8449393b76d567b, type: 3}
+  m_Name: RunConfig
+  m_EditorClassIdentifier: Roglike::Roglike.Data.RunConfig
+  rooms:
+  - name: "\uCD08\uC6D0"
+    waves:
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 3
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 4
+  - name: "\uC5B8\uB355"
+    waves:
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 4
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 5
+  - name: "\uC232 \uC785\uAD6C"
+    waves:
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 4
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 5
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 6
+  - name: "\uAE4A\uC740 \uC232"
+    waves:
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 5
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 6
+    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
+      count: 7
+  bossPrefab: {fileID: 6622295527402659938, guid: 03b23ca775cb8e64c850ecb30bdc1e9d, type: 3}
+  enemyHealthGrowth: 1.8
+  bossHealthMultiplier: 1
+  healOnRoomClear: 0.25
+  upgradeChoices: 3

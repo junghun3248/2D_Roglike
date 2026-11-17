@@ -2,6 +2,7 @@ using System.Collections.Generic;
 using Roglike.Combat;
 using Roglike.Core;
 using Roglike.Data;
+using Roglike.Progression;
 using UnityEngine;
 
 namespace Roglike.Player
@@ -39,6 +40,7 @@ namespace Roglike.Player
         private PlayerController _controller;
         private PlayerInputReader _input;
         private OverdriveController _overdrive;
+        private PlayerStats _stats;
         private readonly List<Collider2D> _hits = new List<Collider2D>(16);
         private readonly HashSet<Health> _hitThisSwing = new HashSet<Health>();
         private ContactFilter2D _filter;
@@ -58,6 +60,7 @@ namespace Roglike.Player
             _controller = GetComponent<PlayerController>();
             _input = GetComponent<PlayerInputReader>();
             _overdrive = GetComponent<OverdriveController>();
+            _stats = GetComponent<PlayerStats>();
 
             _filter = new ContactFilter2D();
             _filter.SetLayerMask(GameLayers.EnemyMask);
@@ -114,7 +117,7 @@ namespace Roglike.Player
 
         private void UpdateAttack(float dt)
         {
-            _attackTime += dt;
+            _attackTime += dt * AttackSpeed;
             float activeStart = _current.startup;
             float activeEnd = _current.startup + _current.active;
 
@@ -160,7 +163,17 @@ namespace Roglike.Player
             _checkedOnce = false;
             _feedbackPlayed = false;
             _hitThisSwing.Clear();
-            _controller.BeginAttack(_current.lungeSpeed, _current.TotalDuration);
+            _controller.BeginAttack(_current.lungeSpeed, _current.TotalDuration / AttackSpeed);
+        }
+
+        // PlayerStats가 있으면 런 강화가 반영된 값을, 없으면(테스트 씬 등) 인스펙터 기본값을 쓴다.
+        private float CritChance => _stats != null ? _stats.Get(StatType.CritChance) : _critChance;
+        private float CritMultiplier => _stats != null ? _stats.Get(StatType.CritDamage) : _critMultiplier;
+        private float AttackSpeed => _stats != null ? Mathf.Max(0.2f, _stats.Get(StatType.AttackSpeed)) : 1f;
+
+        private double BaseHitDamage(float skillMultiplier)
+        {
+            return _stats != null ? _stats.BaseHitDamage(skillMultiplier) : _attackPower * skillMultiplier;
         }
 
         private Vector2 HitboxCenter(AttackData attack)
@@ -190,10 +203,10 @@ namespace Roglike.Player
                     continue;
                 }
 
-                bool isCritical = Random.value < _critChance;
-                double damage = _attackPower * _current.damageMultiplier
+                bool isCritical = Random.value < CritChance;
+                double damage = BaseHitDamage(_current.damageMultiplier)
                     * (1f + Random.Range(-_damageVariance, _damageVariance))
-                    * (isCritical ? _critMultiplier : 1f)
+                    * (isCritical ? CritMultiplier : 1f)
                     * (_overdrive != null ? _overdrive.DamageMultiplier : 1f);
 
                 Vector2 point = (Vector2)hit.bounds.center + Random.insideUnitCircle * 0.2f;

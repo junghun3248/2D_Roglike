@@ -1,5 +1,6 @@
 using Roglike.Combat;
 using Roglike.Core;
+using Roglike.Progression;
 using UnityEngine;
 
 namespace Roglike.Player
@@ -48,6 +49,7 @@ namespace Roglike.Player
         private BoxCollider2D _collider;
         private PlayerInputReader _input;
         private Health _health;
+        private PlayerStats _stats;
         private readonly Collider2D[] _groundHits = new Collider2D[4];
         private ContactFilter2D _groundFilter;
 
@@ -83,6 +85,7 @@ namespace Roglike.Player
             _collider = GetComponent<BoxCollider2D>();
             _input = GetComponent<PlayerInputReader>();
             _health = GetComponent<Health>();
+            _stats = GetComponent<PlayerStats>();
 
             _rigidbody.gravityScale = 0f;
             _rigidbody.freezeRotation = true;
@@ -277,7 +280,8 @@ namespace Roglike.Player
                 Facing = Mathf.Sign(input);
             }
 
-            float target = input * _moveSpeed;
+            float speedMultiplier = _stats != null ? _stats.Get(StatType.MoveSpeed) : 1f;
+            float target = input * _moveSpeed * speedMultiplier;
             float acceleration = IsGrounded ? _groundAcceleration : _airAcceleration;
             _velocity.x = Mathf.MoveTowards(_velocity.x, target, acceleration * dt);
         }

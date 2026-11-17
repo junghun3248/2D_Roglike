@@ -20,7 +20,8 @@ Assets/_Game/
     Combat/      공격, 피격, 데미지 계산, 타격 연출
     Player/      이동, 입력, 상태
     Enemies/     적 AI, 스포너
-    Progression/ 런 내 성장(3택1), 영구 성장
+    Progression/ 능력치(PlayerStats), 런 내 성장(3택1), 영구 성장
+    Run/         한 판의 흐름 (구역 → 강화 → 보스 → 결과)
     UI/          HUD, 데미지 숫자, 메뉴
     Data/        ScriptableObject 정의 (스킬·적·아이템 데이터 타입)
   Data/          ScriptableObject 에셋 (실제 수치)

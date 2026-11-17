@@ -4,6 +4,8 @@ using Roglike.Core;
 using Roglike.Data;
 using Roglike.Enemies;
 using Roglike.Player;
+using Roglike.Progression;
+using Roglike.Run;
 using Roglike.UI;
 using UnityEditor;
 using UnityEditor.SceneManagement;
@@ -25,6 +27,9 @@ namespace Roglike.EditorTools
         private const string AttackFolder = Root + "/Data/Player";
         private const string PrefabFolder = Root + "/Prefabs/Enemies";
         private const string SlimePrefabPath = PrefabFolder + "/Slime.prefab";
+        private const string BossPrefabPath = PrefabFolder + "/KingSlime.prefab";
+        private const string RunScenePath = Root + "/Scenes/Run.unity";
+        private const string RunConfigPath = Root + "/Data/Run/RunConfig.asset";
         private const string UnlitMaterialPath = "Packages/com.unity.render-pipelines.universal/Runtime/Materials/Sprite-Unlit-Default.mat";
         private const float LevelHalfWidth = 35f;
 
@@ -45,14 +50,28 @@ namespace Roglike.EditorTools
             Debug.Log("[Roglike] Prototype 씬을 만들었습니다. Play를 눌러 테스트하세요.");
         }
 
+        [MenuItem("Roglike/Build Run Scene")]
+        public static void BuildRunFromMenu()
+        {
+            if (!EditorSceneManager.SaveCurrentModifiedScenesIfUserWantsTo())
+            {
+                return;
+            }
+
+            BuildRun();
+            EditorSceneManager.OpenScene(RunScenePath);
+            Debug.Log("[Roglike] Run 씬을 만들었습니다. Play를 눌러 한 판을 테스트하세요.");
+        }
+
         /// <summary>배치 모드용: Unity -batchmode -executeMethod Roglike.EditorTools.PrototypeSceneBuilder.BuildFromCommandLine</summary>
         public static void BuildFromCommandLine()
         {
             Build();
-            Debug.Log("[Roglike] Prototype scene built: " + ScenePath);
+            BuildRun();
+            Debug.Log("[Roglike] Scenes built: " + ScenePath + ", " + RunScenePath);
         }
 
-        private static void Build()
+        private static Scene BeginScene()
         {
             EnsureLayers();
             EnsureFolder(ArtFolder);
@@ -62,11 +81,15 @@ namespace Roglike.EditorTools
 
             // NewScene이 참조 없는 에셋을 언로드하므로, 에셋은 씬을 만든 뒤에 불러온다.
             Scene scene = EditorSceneManager.NewScene(NewSceneSetup.EmptyScene, NewSceneMode.Single);
-
             _square = EnsureSprite("Square", false);
             _circle = EnsureSprite("Circle", true);
             _material = AssetDatabase.LoadAssetAtPath<Material>(UnlitMaterialPath);
+            return scene;
+        }
 
+        private static void Build()
+        {
+            Scene scene = BeginScene();
             AttackData[] combo = EnsureCombo();
             GameObject slimePrefab = EnsureSlimePrefab();
 
@@ -77,8 +100,152 @@ namespace Roglike.EditorTools
             CreateSystems(player);
 
             EditorSceneManager.SaveScene(scene, ScenePath);
-            AddSceneToBuildSettings(ScenePath);
+            AddSceneToBuildSettings(ScenePath, false);
             AssetDatabase.SaveAssets();
+        }
+
+        /// <summary>실제 한 판: 구역 → 강화 3택1 → … → 보스 → 결과.</summary>
+        private static void BuildRun()
+        {
+            Scene scene = BeginScene();
+            AttackData[] combo = EnsureCombo();
+            GameObject slimePrefab = EnsureSlimePrefab();
+            GameObject bossPrefab = EnsureBossPrefab(slimePrefab);
+            UpgradeData[] upgrades = UpgradeLibraryBuilder.EnsureDefaultUpgrades();
+            RunConfig config = EnsureRunConfig(slimePrefab, bossPrefab);
+
+            GameObject player = CreatePlayer(combo);
+            SetBool(player.GetComponent<PlayerDeath>(), "_restartOnDeath", false);
+            SetBool(player.GetComponent<OverdriveController>(), "_startFull", false);
+
+            CreateLevel();
+            CreateCamera(player.transform);
+            CreateSystems(player);
+
+            var runObject = new GameObject("Run");
+            var playerSpawn = new GameObject("PlayerSpawn").transform;
+            playerSpawn.SetParent(runObject.transform, false);
+            playerSpawn.position = new Vector3(0f, 1.2f, 0f);
+            var bossSpawn = new GameObject("BossSpawn").transform;
+            bossSpawn.SetParent(runObject.transform, false);
+            bossSpawn.position = new Vector3(10f, 3f, 0f);
+
+            Vector2[] points =
+            {
+                new Vector2(-24f, 1.5f), new Vector2(-14f, 1.5f), new Vector2(-6f, 1.5f), new Vector2(7f, 1.5f),
+                new Vector2(15f, 1.5f), new Vector2(25f, 1.5f), new Vector2(-12f, 4.5f), new Vector2(6f, 5f),
+                new Vector2(19f, 6.5f), new Vector2(-25f, 7f),
+            };
+            var spawnPoints = new Object[points.Length];
+            for (int i = 0; i < points.Length; i++)
+            {
+                var point = new GameObject("SpawnPoint" + i).transform;
+                point.SetParent(runObject.transform, false);
+                point.position = points[i];
+                spawnPoints[i] = point;
+            }
+
+            var ui = new GameObject("RunUI");
+            var upgradeChoice = ui.AddComponent<UpgradeChoiceUI>();
+            var bossBar = ui.AddComponent<BossHealthBar>();
+            var fader = ui.AddComponent<ScreenFader>();
+            var result = ui.AddComponent<RunResultScreen>();
+
+            var run = runObject.AddComponent<RunManager>();
+            SetObject(run, "_config", config);
+            SetObjectArray(run, "_upgrades", upgrades);
+            SetObject(run, "_player", player.GetComponent<PlayerStats>());
+            SetObject(run, "_playerSpawn", playerSpawn);
+            SetObject(run, "_bossSpawn", bossSpawn);
+            SetObjectArray(run, "_spawnPoints", spawnPoints);
+            SetObject(run, "_upgradeChoice", upgradeChoice);
+            SetObject(run, "_bossBar", bossBar);
+            SetObject(run, "_fader", fader);
+            SetObject(run, "_result", result);
+
+            var hud = ui.AddComponent<RunHud>();
+            SetObject(hud, "_run", run);
+
+            EditorSceneManager.SaveScene(scene, RunScenePath);
+            AddSceneToBuildSettings(RunScenePath, true);
+            AssetDatabase.SaveAssets();
+        }
+
+        private static GameObject EnsureBossPrefab(GameObject minionPrefab)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            var boss = new GameObject("KingSlime") { layer = GameLayers.Enemy };
+            var body = boss.AddComponent<Rigidbody2D>();
+            body.gravityScale = 3f;
+            body.mass = 20f;
+            body.freezeRotation = true;
+            body.interpolation = RigidbodyInterpolation2D.Interpolate;
+            var collider = boss.AddComponent<BoxCollider2D>();
+            collider.size = new Vector2(2.6f, 2f);
+
+            var visual = new GameObject("Visual").transform;
+            visual.SetParent(boss.transform, false);
+            SpriteRenderer bodyRenderer = CreateSprite("Body", visual, _circle, new Color(0.35f, 0.8f, 0.95f), 12, new Vector2(0f, 0.1f), new Vector2(3.2f, 2.5f));
+            CreateSprite("EyeL", visual, _circle, new Color(0.08f, 0.1f, 0.2f), 13, new Vector2(0.45f, 0.45f), new Vector2(0.28f, 0.42f));
+            CreateSprite("EyeR", visual, _circle, new Color(0.08f, 0.1f, 0.2f), 13, new Vector2(0.95f, 0.45f), new Vector2(0.28f, 0.42f));
+            CreateSprite("Crown", visual, _square, new Color(1f, 0.82f, 0.25f), 14, new Vector2(0f, 1.45f), new Vector2(1.2f, 0.45f));
+
+            var health = boss.AddComponent<Health>();
+            SetEnum(health, "_team", (int)Team.Enemy);
+            SetDouble(health, "_maxHealth", 2500);
+
+            var flash = boss.AddComponent<HitFlash>();
+            SetObjectArray(flash, "_renderers", new Object[] { bodyRenderer });
+            SetObject(flash, "_squashTarget", visual);
+            SetFloat(flash, "_squashAmount", 0.08f);
+
+            var bossSlime = boss.AddComponent<BossSlime>();
+            SetObject(bossSlime, "_visual", visual);
+            SetObject(bossSlime, "_minionPrefab", minionPrefab);
+
+            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(boss, BossPrefabPath);
+            Object.DestroyImmediate(boss);
+            return AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath) ?? prefab;
+        }
+
+        private static RunConfig EnsureRunConfig(GameObject slimePrefab, GameObject bossPrefab)
+        {
+            var existing = AssetDatabase.LoadAssetAtPath<RunConfig>(RunConfigPath);
+            if (existing != null)
+            {
+                return existing;
+            }
+
+            EnsureFolder(Root + "/Data/Run");
+            var config = ScriptableObject.CreateInstance<RunConfig>();
+            config.bossPrefab = bossPrefab;
+            config.rooms = new[]
+            {
+                Room("초원", slimePrefab, 3, 4),
+                Room("언덕", slimePrefab, 4, 5),
+                Room("숲 입구", slimePrefab, 4, 5, 6),
+                Room("깊은 숲", slimePrefab, 5, 6, 7),
+            };
+            AssetDatabase.CreateAsset(config, RunConfigPath);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(RunConfigPath, ImportAssetOptions.ForceSynchronousImport);
+            return AssetDatabase.LoadAssetAtPath<RunConfig>(RunConfigPath);
+        }
+
+        private static RoomEntry Room(string name, GameObject prefab, params int[] waveCounts)
+        {
+            var waves = new WaveEntry[waveCounts.Length];
+            for (int i = 0; i < waveCounts.Length; i++)
+            {
+                waves[i] = new WaveEntry { enemyPrefab = prefab, count = waveCounts[i] };
+            }
+
+            return new RoomEntry { name = name, waves = waves };
         }
 
         // ---------- 플레이어 ----------
@@ -105,6 +272,7 @@ namespace Roglike.EditorTools
             SetEnum(health, "_team", (int)Team.Player);
             SetDouble(health, "_maxHealth", 100);
 
+            player.AddComponent<PlayerStats>();
             player.AddComponent<PlayerInputReader>();
             var controller = player.AddComponent<PlayerController>();
             SetObject(controller, "_visual", visual);
@@ -423,15 +591,26 @@ namespace Roglike.EditorTools
             tagManager.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void AddSceneToBuildSettings(string path)
+        /// <param name="first">true면 빌드 첫 씬(게임 시작 씬)으로 둔다.</param>
+        private static void AddSceneToBuildSettings(string path, bool first)
         {
-            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene> { new EditorBuildSettingsScene(path, true) };
+            var scenes = new System.Collections.Generic.List<EditorBuildSettingsScene>();
             foreach (EditorBuildSettingsScene scene in EditorBuildSettings.scenes)
             {
                 if (scene.path != path)
                 {
                     scenes.Add(scene);
                 }
+            }
+
+            var entry = new EditorBuildSettingsScene(path, true);
+            if (first)
+            {
+                scenes.Insert(0, entry);
+            }
+            else
+            {
+                scenes.Add(entry);
             }
 
             EditorBuildSettings.scenes = scenes.ToArray();
@@ -479,6 +658,8 @@ namespace Roglike.EditorTools
         private static void SetFloat(Object target, string field, float value) => Modify(target, field, p => p.floatValue = value);
 
         private static void SetInt(Object target, string field, int value) => Modify(target, field, p => p.intValue = value);
+
+        private static void SetBool(Object target, string field, bool value) => Modify(target, field, p => p.boolValue = value);
 
         private static void Modify(Object target, string field, System.Action<SerializedProperty> set)
         {
