@@ -1,0 +1,57 @@
+{
+  "hero_idle": {
+    "cell": [
+      160,
+      128
+    ],
+    "frames": 6,
+    "pivot": [
+      80.0,
+      0
+    ]
+  },
+  "hero_attack": {
+    "cell": [
+      192,
+      128
+    ],
+    "frames": 6,
+    "pivot": [
+      96.0,
+      0
+    ]
+  },
+  "hero_run": {
+    "cell": [
+      128,
+      128
+    ],
+    "frames": 8,
+    "pivot": [
+      64.0,
+      0
+    ]
+  },
+  "slime_idle": {
+    "cell": [
+      64,
+      64
+    ],
+    "frames": 4,
+    "pivot": [
+      32.0,
+      0
+    ]
+  },
+  "slime_hurt": {
+    "cell": [
+      64,
+      64
+    ],
+    "frames": 2,
+    "pivot": [
+      32.0,
+      0
+    ]
+  }
+}

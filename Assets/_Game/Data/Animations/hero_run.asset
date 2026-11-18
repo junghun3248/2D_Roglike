@@ -1,0 +1,25 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0a6954ec9ad8db846b98b9fed7322dbd, type: 3}
+  m_Name: hero_run
+  m_EditorClassIdentifier: Roglike::Roglike.Data.SpriteAnimationData
+  frames:
+  - {fileID: 21300000, guid: 0e39d7c7aad0d4f44b540a78b6811265, type: 3}
+  - {fileID: 21300000, guid: 0861eddc517627845a828ca225bf626a, type: 3}
+  - {fileID: 21300000, guid: 6556c371265623a4994d39b03de60ebd, type: 3}
+  - {fileID: 21300000, guid: dda9023bc550aa949b34c5d0664b3283, type: 3}
+  - {fileID: 21300000, guid: e211904db84ce0b439df50a03b6885ea, type: 3}
+  - {fileID: 21300000, guid: 8641f94ba8aa3b8419688f1245d08637, type: 3}
+  - {fileID: 21300000, guid: 8a022d574d9e41b4e81a3c739a9c06a3, type: 3}
+  - {fileID: 21300000, guid: 151322760e5d1e64abd6cd9cf5cc8e4e, type: 3}
+  fps: 14
+  loop: 1

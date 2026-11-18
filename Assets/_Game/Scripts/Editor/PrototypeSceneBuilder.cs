@@ -93,7 +93,7 @@ namespace Roglike.EditorTools
             AttackData[] combo = EnsureCombo();
             GameObject slimePrefab = EnsureSlimePrefab();
 
-            GameObject player = CreatePlayer(combo);
+            GameObject player = CreatePlayer(combo, SkillLibraryBuilder.EnsureDefaultSkills());
             CreateLevel();
             CreateSpawner(slimePrefab);
             CreateCamera(player.transform);
@@ -116,7 +116,8 @@ namespace Roglike.EditorTools
             MetaUpgradeData[] metaUpgrades = MetaLibraryBuilder.EnsureDefaultMetaUpgrades();
             RunConfig config = EnsureRunConfig(slimePrefab, bossPrefab);
 
-            GameObject player = CreatePlayer(combo);
+            SkillDefinition[] skills = SkillLibraryBuilder.EnsureDefaultSkills();
+            GameObject player = CreatePlayer(combo, new[] { skills[0] });
             SetBool(player.GetComponent<PlayerDeath>(), "_restartOnDeath", false);
             SetBool(player.GetComponent<OverdriveController>(), "_startFull", false);
 
@@ -184,7 +185,8 @@ namespace Roglike.EditorTools
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath);
             if (existing != null)
             {
-                return existing;
+                ApplyBossArt();
+                return AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath);
             }
 
             var boss = new GameObject("KingSlime") { layer = GameLayers.Enemy };
@@ -218,6 +220,7 @@ namespace Roglike.EditorTools
 
             GameObject prefab = PrefabUtility.SaveAsPrefabAsset(boss, BossPrefabPath);
             Object.DestroyImmediate(boss);
+            ApplyBossArt();
             return AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath) ?? prefab;
         }
 
@@ -258,7 +261,7 @@ namespace Roglike.EditorTools
 
         // ---------- 플레이어 ----------
 
-        private static GameObject CreatePlayer(AttackData[] combo)
+        private static GameObject CreatePlayer(AttackData[] combo, SkillDefinition[] startingSkills)
         {
             var player = new GameObject("Player") { layer = GameLayers.Player };
             player.transform.position = new Vector3(0f, 1.2f, 0f);
@@ -286,16 +289,21 @@ namespace Roglike.EditorTools
             SetObject(controller, "_visual", visual);
             SetObject(controller, "_bodyRenderer", bodyRenderer);
 
+            player.AddComponent<OverdriveController>();
+            player.AddComponent<PlayerHitResolver>();
+            var skills = player.AddComponent<PlayerSkills>();
+            SetObjectArray(skills, "_startingSkills", startingSkills);
+
             var combat = player.AddComponent<PlayerCombat>();
             SetObjectArray(combat, "_combo", combo);
-
-            player.AddComponent<OverdriveController>();
+            MovesetLibraryBuilder.Configure(combat);
 
             var flash = player.AddComponent<HitFlash>();
             SetObjectArray(flash, "_renderers", new Object[] { bodyRenderer, eye, scarf });
             SetObject(flash, "_squashTarget", visual);
 
             player.AddComponent<PlayerDeath>();
+            ArtSetup.ApplyToPlayer(player, bodyRenderer, eye, scarf);
             return player;
         }
 
@@ -306,7 +314,8 @@ namespace Roglike.EditorTools
             var existing = AssetDatabase.LoadAssetAtPath<GameObject>(SlimePrefabPath);
             if (existing != null)
             {
-                return existing;
+                ApplySlimeArt();
+                return AssetDatabase.LoadAssetAtPath<GameObject>(SlimePrefabPath);
             }
 
             var slime = new GameObject("Slime") { layer = GameLayers.Enemy };
@@ -333,10 +342,17 @@ namespace Roglike.EditorTools
             var enemy = slime.AddComponent<SlimeEnemy>();
             SetObject(enemy, "_visual", visual);
 
-            GameObject prefab = PrefabUtility.SaveAsPrefabAsset(slime, SlimePrefabPath);
+            PrefabUtility.SaveAsPrefabAsset(slime, SlimePrefabPath);
             Object.DestroyImmediate(slime);
-            return prefab;
+            ApplySlimeArt();
+            return AssetDatabase.LoadAssetAtPath<GameObject>(SlimePrefabPath);
         }
+
+        // 슬라임 콜라이더 1x0.8 (가운데 원점) → 발밑 y -0.4.
+        private static void ApplySlimeArt() => ArtSetup.ApplyToSlimePrefab(SlimePrefabPath, 1f, Color.white, -0.4f, "Eye");
+
+        // 킹 슬라임: 같은 그림을 2.6배, 푸른 빛. 콜라이더 2.6x2 → 발밑 y -1.
+        private static void ApplyBossArt() => ArtSetup.ApplyToSlimePrefab(BossPrefabPath, 2.6f, new Color(0.6f, 0.85f, 1f), -1f, "Eye", new Vector2(0f, 2.05f));
 
         private static void CreateSpawner(GameObject slimePrefab)
         {
@@ -368,9 +384,19 @@ namespace Roglike.EditorTools
         {
             var level = new GameObject("Level").transform;
 
-            // 배경 (밝은 하늘 + 언덕 + 구름). 충돌 없음.
+            // 배경 (밝은 하늘 + 언덕 + 구름). 충돌 없음. 생성 그림이 있으면 시차 배경으로 대체.
             var background = new GameObject("Background").transform;
             background.SetParent(level, false);
+            if (!ArtSetup.CreateBackground(background))
+            {
+                CreatePlaceholderBackground(background);
+            }
+
+            CreateLevelSolids(level);
+        }
+
+        private static void CreatePlaceholderBackground(Transform background)
+        {
             CreateSprite("HillFar", background, _circle, new Color(0.62f, 0.86f, 0.72f), -20, new Vector2(-18f, -6f), new Vector2(40f, 18f));
             CreateSprite("HillFar2", background, _circle, new Color(0.62f, 0.86f, 0.72f), -20, new Vector2(22f, -7f), new Vector2(44f, 20f));
             CreateSprite("HillNear", background, _circle, new Color(0.5f, 0.8f, 0.6f), -15, new Vector2(2f, -9f), new Vector2(50f, 16f));
@@ -380,7 +406,10 @@ namespace Roglike.EditorTools
                 float y = 9f + (i % 2) * 1.5f;
                 CreateSprite("Cloud" + i, background, _circle, new Color(1f, 1f, 1f, 0.85f), -18, new Vector2(x, y), new Vector2(4.5f, 1.6f));
             }
+        }
 
+        private static void CreateLevelSolids(Transform level)
+        {
             Color groundColor = new Color(0.55f, 0.4f, 0.3f);
             Color grassColor = new Color(0.45f, 0.82f, 0.4f);
 
@@ -411,6 +440,11 @@ namespace Roglike.EditorTools
                 var effector = go.AddComponent<PlatformEffector2D>();
                 effector.useOneWay = true;
                 effector.surfaceArc = 160f;
+            }
+
+            if (ArtSetup.DecorateSolid(go, size, oneWay, topColor.HasValue))
+            {
+                return;
             }
 
             CreateSprite("Fill", go.transform, _square, color, 0, Vector2.zero, size);
@@ -463,6 +497,9 @@ namespace Roglike.EditorTools
             var hud = systems.AddComponent<HudController>();
             SetObject(hud, "_playerHealth", player.GetComponent<Health>());
             SetObject(hud, "_overdrive", overdrive);
+
+            var skillBar = systems.AddComponent<SkillBarUI>();
+            SetObject(skillBar, "_skills", player.GetComponent<PlayerSkills>());
 
             var screenEffect = systems.AddComponent<OverdriveScreenEffect>();
             SetObject(screenEffect, "_overdrive", overdrive);

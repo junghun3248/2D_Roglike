@@ -44,15 +44,15 @@ namespace Roglike.Tests
             var body = slime.GetComponent<Rigidbody2D>();
             body.position = (Vector2)player.transform.position + new Vector2(1.3f, -0.35f);
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.J));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A));
             yield return new WaitForSecondsRealtime(0.12f);
             Capture(directory, "2_attack_hit");
             yield return new WaitForSecondsRealtime(0.5f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.L));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.F));
             yield return new WaitForSecondsRealtime(0.4f);
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.J, Key.D));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A, Key.RightArrow));
             yield return new WaitForSecondsRealtime(0.35f);
             Capture(directory, "3_overdrive");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
@@ -124,7 +124,7 @@ namespace Roglike.Tests
             yield return new WaitForSecondsRealtime(4f);
             yield return CaptureScreen(directory, "7_result");
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.J));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A));
             yield return new WaitForSecondsRealtime(0.1f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             yield return new WaitForSecondsRealtime(0.8f);
