@@ -57,13 +57,13 @@ namespace Roglike.UI
                 new Vector2(500f, 60f), TextAnchor.MiddleRight);
             _earned = CreateLabel("Earned", canvas.transform, "", 28, new Vector2(550f, 395f),
                 new Vector2(500f, 50f), TextAnchor.MiddleRight);
-            CreateLabel("Hint", canvas.transform, "↑↓ 선택 · J 구매 · Space 다음 런 출발", 30,
+            CreateLabel("Hint", canvas.transform, "↑↓ 선택 · A / J 구매 · Space 다음 런 출발", 30,
                 new Vector2(0f, -455f), new Vector2(1600f, 70f), TextAnchor.MiddleCenter);
 
             _actions = new InputActionMap("MetaShop");
             AddButton("Up", () => Move(-1), "<Keyboard>/w", "<Keyboard>/upArrow", "<Gamepad>/dpad/up");
             AddButton("Down", () => Move(1), "<Keyboard>/s", "<Keyboard>/downArrow", "<Gamepad>/dpad/down");
-            AddButton("Buy", BuySelected, "<Keyboard>/j", "<Keyboard>/enter",
+            AddButton("Buy", BuySelected, "<Keyboard>/a", "<Keyboard>/j", "<Keyboard>/enter",
                 "<Keyboard>/numpadEnter", "<Gamepad>/buttonSouth");
             AddButton("StartRun", StartRun, "<Keyboard>/space", "<Gamepad>/start");
             _root.SetActive(false);

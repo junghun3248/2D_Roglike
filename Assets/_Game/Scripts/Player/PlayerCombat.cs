@@ -11,36 +11,33 @@ namespace Roglike.Player
     /// 기본 공격 콤보와 타격 판정, 타격감(히트스톱·흔들림·줌·파편) 발생.
     /// 공격 키를 누르고 있으면 콤보가 계속 이어진다 (메이플식 꾹 누르기).
     /// </summary>
-    [RequireComponent(typeof(PlayerController), typeof(PlayerInputReader))]
+    [RequireComponent(typeof(PlayerController), typeof(PlayerInputReader), typeof(PlayerHitResolver))]
+    [RequireComponent(typeof(ChargeAttackState))]
     public class PlayerCombat : MonoBehaviour
     {
         [Header("Combo")]
         [SerializeField] private AttackData[] _combo;
+        [SerializeField] private AttackData[] _airCombo;
+        [SerializeField] private AttackData[] _heavyCombo;
+        [SerializeField] private AttackData _dashAttack;
+        [SerializeField] private AttackData _launcher;
+        [SerializeField] private AttackData _plunge;
+        [SerializeField] private AttackData _chargedStrike;
+        [SerializeField] private float _dashAttackWindow = 0.15f;
+        [SerializeField] private float _directionThreshold = 0.5f;
         [SerializeField] private float _attackBufferTime = 0.25f;
         [SerializeField] private float _comboResetTime = 0.4f;
 
-        [Header("Damage (M3에서 스탯 시스템으로 이동 예정)")]
-        [SerializeField] private double _attackPower = 12;
-        [SerializeField, Range(0f, 1f)] private float _critChance = 0.2f;
-        [SerializeField] private float _critMultiplier = 2f;
-        [SerializeField, Range(0f, 0.5f)] private float _damageVariance = 0.1f;
-
-        [Header("Feel")]
         [SerializeField] private Color _slashColor = new Color(0.85f, 0.95f, 1f, 0.9f);
-        [SerializeField] private Color _sparkColor = Color.white;
-        [SerializeField] private Color _critSparkColor = new Color(1f, 0.8f, 0.25f);
-        [SerializeField] private float _critHitStopMultiplier = 1.4f;
-        [SerializeField] private float _overdrivePunchZoom = 0.72f;
-        [SerializeField] private float _finisherPunchZoom = 0.85f;
-        [SerializeField] private float _killPunchZoom = 0.62f;
-        [SerializeField] private float _punchDuration = 0.16f;
-        [SerializeField] private float _killSlowScale = 0.2f;
-        [SerializeField] private float _killSlowDuration = 0.35f;
 
         private PlayerController _controller;
         private PlayerInputReader _input;
-        private OverdriveController _overdrive;
+        private PlayerHitResolver _hitResolver;
         private PlayerStats _stats;
+        private ChargeAttackState _charge;
+        private AttackData[] _sequence;
+        private bool _plunging;
+        private Vector2 _previousHitCenter;
         private readonly List<Collider2D> _hits = new List<Collider2D>(16);
         private readonly HashSet<Health> _hitThisSwing = new HashSet<Health>();
         private ContactFilter2D _filter;
@@ -59,8 +56,9 @@ namespace Roglike.Player
         {
             _controller = GetComponent<PlayerController>();
             _input = GetComponent<PlayerInputReader>();
-            _overdrive = GetComponent<OverdriveController>();
+            _hitResolver = GetComponent<PlayerHitResolver>();
             _stats = GetComponent<PlayerStats>();
+            _charge = GetComponent<ChargeAttackState>();
 
             _filter = new ContactFilter2D();
             _filter.SetLayerMask(GameLayers.EnemyMask);
@@ -90,29 +88,89 @@ namespace Roglike.Player
             }
 
             bool interrupted = _controller.ConsumeAttackInterrupted();
-            if (_current != null && (interrupted || _controller.IsDashing || _controller.IsHurt))
+            bool blocked = _controller.IsHurt || _controller.IsDashing || (_controller.IsInSkill && !_plunging);
+            if (_current != null && (interrupted || blocked || (_plunging && !_controller.IsPlunging)))
             {
-                // 대시·피격·점프로 공격이 끊겼다.
                 _current = null;
+                _plunging = false;
+                _sequence = null;
                 _nextIndex = 0;
             }
 
+            bool released = _charge.Tick(dt, _current == null, out bool charged);
+            if (_charge.IsActive) return;
+            if (released && _controller.CanAttack)
+            {
+                _bufferTimer = 0f;
+                if (charged) StartAttack(_chargedStrike);
+                else StartSequence(_heavyCombo);
+                return;
+            }
             if (_current != null)
             {
-                UpdateAttack(dt);
+                if (_plunging) UpdatePlunge(dt);
+                else UpdateAttack(dt);
                 return;
             }
 
             _comboResetTimer -= dt;
-            if (_comboResetTimer <= 0f)
+            if (_comboResetTimer <= 0f) _nextIndex = 0;
+            if (_controller.IsHurt || (_controller.IsInSkill && !_controller.IsPlunging)) return;
+            if (!_controller.IsGrounded && _input.HeavyPressed && _controller.CanAttack)
             {
-                _nextIndex = 0;
+                StartPlunge();
+                return;
             }
+            if (_bufferTimer <= 0f) return;
+            if (_controller.TimeSinceDash <= _dashAttackWindow && _dashAttack != null)
+                StartAttack(_dashAttack);
+            else if (_controller.CanAttack)
+            {
+                if (!_controller.IsGrounded && _input.MoveY < -_directionThreshold) StartPlunge();
+                else if (_controller.IsGrounded && _input.MoveY > _directionThreshold) StartAttack(_launcher);
+                else StartSequence(_controller.IsGrounded ? _combo : _airCombo);
+            }
+        }
 
-            if (_bufferTimer > 0f && _controller.CanAttack)
+        private void StartSequence(AttackData[] sequence)
+        {
+            if (sequence == null || sequence.Length == 0) return;
+            int index = _sequence == sequence ? _nextIndex : 0;
+            StartAttack(sequence[Mathf.Clamp(index, 0, sequence.Length - 1)], sequence, index);
+        }
+
+        private void StartPlunge()
+        {
+            if (_plunge == null) return;
+            StartAttack(_plunge);
+            _controller.BeginPlunge(_plunge.SelfVelocity, _plunge.MotionTimeout);
+            _controller.ConsumeAttackInterrupted();
+            _plunging = true;
+        }
+
+        private void UpdatePlunge(float dt)
+        {
+            _attackTime += dt;
+            if (_controller.IsGrounded)
             {
-                StartAttack(_nextIndex);
+                _controller.EndSkillMotion();
+                _plunging = false;
+                _hitThisSwing.Clear();
+                _feedbackPlayed = false;
+                Vector2 center = (Vector2)transform.position + _current.LandingHitboxOffset;
+                DetectHits(center, _current.LandingHitboxSize);
+                SlashEffect.Spawn(center, _current.LandingHitboxSize, 0f, _slashColor, _current.active);
+                _attackTime = _current.startup + _current.active;
+                _checkedOnce = _slashSpawned = true;
+                _controller.BeginAttack(0f, _current.recovery / AttackSpeed);
             }
+            else if (_attackTime >= _current.MotionTimeout)
+            {
+                _controller.EndSkillMotion();
+                _plunging = false;
+                _current = null;
+            }
+            else if (_attackTime >= _current.startup) DetectHits();
         }
 
         private void UpdateAttack(float dt)
@@ -136,11 +194,13 @@ namespace Roglike.Player
                 }
             }
 
-            bool isLast = _comboIndex >= _combo.Length - 1;
+            bool isLast = _sequence == null || _comboIndex >= _sequence.Length - 1;
             float chainTime = Mathf.Max(_current.cancelTime, activeEnd);
-            if (!isLast && _bufferTimer > 0f && _attackTime >= chainTime)
+            if (!isLast && _sequence != _heavyCombo && _bufferTimer > 0f && _attackTime >= chainTime)
             {
-                StartAttack(_comboIndex + 1);
+                AttackData[] contextCombo = _controller.IsGrounded ? _combo : _airCombo;
+                if (_sequence != contextCombo) StartSequence(contextCombo);
+                else StartAttack(_sequence[_comboIndex + 1], _sequence, _comboIndex + 1);
                 return;
             }
 
@@ -152,29 +212,30 @@ namespace Roglike.Player
             }
         }
 
-        private void StartAttack(int index)
+        private void StartAttack(AttackData attack, AttackData[] sequence = null, int index = 0)
         {
+            if (attack == null) return;
             _controller.FaceInputDirection();
-            _comboIndex = Mathf.Clamp(index, 0, _combo.Length - 1);
-            _current = _combo[_comboIndex];
+            _sequence = sequence;
+            _comboIndex = index;
+            _current = attack;
+            _nextIndex = 0;
             _attackTime = 0f;
             _bufferTimer = 0f;
             _slashSpawned = false;
             _checkedOnce = false;
             _feedbackPlayed = false;
             _hitThisSwing.Clear();
-            _controller.BeginAttack(_current.lungeSpeed, _current.TotalDuration / AttackSpeed);
+            _previousHitCenter = HitboxCenter(_current);
+            _controller.BeginAttack(_current.lungeSpeed, _current.TotalDuration / AttackSpeed,
+                _current.SelfVelocity, _current.KeepMomentum);
+            AttackStarted?.Invoke(_current.TotalDuration / AttackSpeed);
         }
 
-        // PlayerStats가 있으면 런 강화가 반영된 값을, 없으면(테스트 씬 등) 인스펙터 기본값을 쓴다.
-        private float CritChance => _stats != null ? _stats.Get(StatType.CritChance) : _critChance;
-        private float CritMultiplier => _stats != null ? _stats.Get(StatType.CritDamage) : _critMultiplier;
+        /// <summary>공격 하나가 시작될 때 (인자: 플레이어 시간 기준 공격 길이). 애니메이션용.</summary>
+        public event System.Action<float> AttackStarted;
+
         private float AttackSpeed => _stats != null ? Mathf.Max(0.2f, _stats.Get(StatType.AttackSpeed)) : 1f;
-
-        private double BaseHitDamage(float skillMultiplier)
-        {
-            return _stats != null ? _stats.BaseHitDamage(skillMultiplier) : _attackPower * skillMultiplier;
-        }
 
         private Vector2 HitboxCenter(AttackData attack)
         {
@@ -193,7 +254,21 @@ namespace Roglike.Player
         private void DetectHits()
         {
             Vector2 center = HitboxCenter(_current);
-            int count = Physics2D.OverlapBox(center, _current.hitboxSize, 0f, _filter, _hits);
+            Vector2 size = _current.hitboxSize;
+            if (_current.HitsWhileMoving)
+            {
+                Vector2 travel = center - _previousHitCenter;
+                size += new Vector2(Mathf.Abs(travel.x), Mathf.Abs(travel.y));
+                Vector2 midpoint = (center + _previousHitCenter) * 0.5f;
+                _previousHitCenter = center;
+                center = midpoint;
+            }
+            DetectHits(center, size);
+        }
+
+        private void DetectHits(Vector2 center, Vector2 size)
+        {
+            int count = Physics2D.OverlapBox(center, size, 0f, _filter, _hits);
             for (int i = 0; i < count; i++)
             {
                 Collider2D hit = _hits[i];
@@ -203,54 +278,24 @@ namespace Roglike.Player
                     continue;
                 }
 
-                bool isCritical = Random.value < CritChance;
-                double damage = BaseHitDamage(_current.damageMultiplier)
-                    * (1f + Random.Range(-_damageVariance, _damageVariance))
-                    * (isCritical ? CritMultiplier : 1f)
-                    * (_overdrive != null ? _overdrive.DamageMultiplier : 1f);
-
-                Vector2 point = (Vector2)hit.bounds.center + Random.insideUnitCircle * 0.2f;
-                Vector2 knockback = new Vector2(_current.knockback.x * _controller.Facing, _current.knockback.y);
-                var info = new DamageInfo(damage, isCritical, point, knockback, _current.hitStun, gameObject);
-
-                if (!target.TryApplyDamage(info))
-                {
-                    continue;
-                }
-
-                HitSpark.Spawn(point, isCritical ? _critSparkColor : _sparkColor, isCritical ? 10 : 7, isCritical ? 12f : 9f);
-                OnHitLanded(info, target);
+                var spec = new HitSpec(_current.damageMultiplier,
+                    new Vector2(_current.knockback.x * _controller.Facing, _current.knockback.y),
+                    _current.hitStun, _current.hitStop, _current.shake, _current.overdriveGain, _current.isFinisher);
+                _hitResolver.TryHit(target, hit, center, spec, ref _feedbackPlayed);
             }
         }
 
-        private void OnHitLanded(DamageInfo info, Health target)
+        private void OnDisable()
         {
-            bool overdriveActive = _overdrive != null && _overdrive.IsActive;
-            _overdrive?.AddGauge(_current.overdriveGain);
-
-            // 한 번의 휘두르기에 여러 마리를 맞혀도 연출은 한 번만.
-            if (!_feedbackPlayed)
-            {
-                _feedbackPlayed = true;
-                float hitStop = _current.hitStop * (info.IsCritical ? _critHitStopMultiplier : 1f);
-                TimeController.Instance?.HitStop(hitStop);
-                GameCamera.Instance?.Shake(_current.shake * (info.IsCritical ? 1.3f : 1f));
-
-                if (overdriveActive)
-                {
-                    GameCamera.Instance?.PunchZoom(info.Point, _overdrivePunchZoom, _punchDuration);
-                }
-                else if (_current.isFinisher)
-                {
-                    GameCamera.Instance?.PunchZoom(info.Point, _finisherPunchZoom, _punchDuration * 0.7f);
-                }
-            }
-
-            if (target.IsDead && (_current.isFinisher || overdriveActive))
-            {
-                TimeController.Instance?.PulseSlow(_killSlowScale, _killSlowDuration);
-                GameCamera.Instance?.PunchZoom(info.Point, _killPunchZoom, _killSlowDuration);
-            }
+            if (_controller == null) return;
+            if (_plunging && _controller.IsPlunging) _controller.EndSkillMotion();
+            _controller.CancelAttack();
+            _charge.Cancel();
+            _current = null;
+            _sequence = null;
+            _plunging = false;
+            _bufferTimer = 0f;
+            _nextIndex = 0;
         }
 
         private void OnDrawGizmosSelected()

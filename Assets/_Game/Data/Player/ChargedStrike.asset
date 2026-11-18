@@ -1,0 +1,35 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b595230a4e03f24408d55a6e4ac7dfc7, type: 3}
+  m_Name: ChargedStrike
+  m_EditorClassIdentifier: Roglike::Roglike.Data.AttackData
+  damageMultiplier: 4.5
+  hitStun: 0.4
+  knockback: {x: 15, y: 8}
+  hitboxOffset: {x: 1.7, y: 0.1}
+  hitboxSize: {x: 4, y: 2.4}
+  startup: 0.1
+  active: 0.15
+  recovery: 0.3
+  cancelTime: 0.24
+  lungeSpeed: 3
+  _selfVelocity: {x: 0, y: 0}
+  _keepMomentum: 0
+  _hitsWhileMoving: 0
+  _landingHitboxSize: {x: 3, y: 1.2}
+  _landingHitboxOffset: {x: 0, y: -0.4}
+  _motionTimeout: 2
+  hitStop: 0.16
+  shake: 0.75
+  isFinisher: 1
+  slashAngle: -10
+  overdriveGain: 14

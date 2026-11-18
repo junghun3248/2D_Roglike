@@ -66,7 +66,7 @@ namespace Roglike.Tests
             var player = Object.FindFirstObjectByType<PlayerController>();
             float startX = player.transform.position.x;
 
-            Press(Key.D);
+            Press(Key.RightArrow);
             yield return new WaitForSecondsRealtime(0.4f);
             Release();
             Assert.Greater(player.transform.position.x, startX + 1.5f, "오른쪽으로 달리지 않았습니다");
@@ -80,7 +80,7 @@ namespace Roglike.Tests
             Assert.IsTrue(player.IsGrounded, "점프 후 착지하지 않았습니다");
 
             float dashStartX = player.transform.position.x;
-            Press(Key.K);
+            Press(Key.LeftShift);
             yield return new WaitForSecondsRealtime(0.25f);
             Release();
             Assert.Greater(player.transform.position.x, dashStartX + 2.5f, "대시 거리가 부족합니다");
@@ -104,7 +104,7 @@ namespace Roglike.Tests
             }
 
             Health.AnyDamaged += Count;
-            Press(Key.J);
+            Press(Key.A);
             yield return new WaitForSecondsRealtime(0.9f);
             Release();
             Health.AnyDamaged -= Count;
@@ -128,7 +128,7 @@ namespace Roglike.Tests
             var overdrive = Object.FindFirstObjectByType<OverdriveController>();
             Assert.IsTrue(overdrive.IsReady, "M1 설정상 오버드라이브 게이지가 가득 차 있어야 합니다");
 
-            Press(Key.L);
+            Press(Key.F);
             yield return new WaitForSecondsRealtime(0.3f);
             Release();
 
@@ -138,7 +138,7 @@ namespace Roglike.Tests
 
             var player = Object.FindFirstObjectByType<PlayerController>();
             float startX = player.transform.position.x;
-            Press(Key.D);
+            Press(Key.RightArrow);
             yield return new WaitForSecondsRealtime(0.4f);
             Release();
             Assert.Greater(player.transform.position.x, startX + 1.5f, "오버드라이브 중 플레이어가 정상 속도로 움직이지 않습니다");

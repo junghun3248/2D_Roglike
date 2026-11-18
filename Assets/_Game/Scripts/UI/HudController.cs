@@ -44,8 +44,8 @@ namespace Roglike.UI
             helpRect.anchorMin = helpRect.anchorMax = Vector2.zero;
             helpRect.pivot = Vector2.zero;
             helpRect.anchoredPosition = new Vector2(40f, 30f);
-            helpRect.sizeDelta = new Vector2(900f, 60f);
-            help.text = "이동 A/D · 점프 Space(2단) · 공격 J(꾹 누르면 콤보) · 대시 K/Shift · 오버드라이브 L/E";
+            helpRect.sizeDelta = new Vector2(1840f, 60f);
+            help.text = "이동 ←→ · 점프 Space · 공격 A (공중·↑A 띄우기·↓A 내려찍기·대시 중 A) ·\n강공격 S (꾹 모으기) · 대시 Shift · 오버드라이브 F · 스킬 Q W E R";
         }
 
         private void LateUpdate()
@@ -72,7 +72,7 @@ namespace Roglike.UI
             {
                 bool blink = Mathf.Repeat(Time.unscaledTime, 0.6f) < 0.3f;
                 _overdriveFillImage.color = blink ? _overdriveReadyColor : Color.white;
-                _overdriveLabel.text = "READY  [L]";
+                _overdriveLabel.text = "READY  [F]";
                 _overdriveLabel.color = _overdriveReadyColor;
             }
             else

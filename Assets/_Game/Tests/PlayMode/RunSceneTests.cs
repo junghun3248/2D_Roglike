@@ -185,7 +185,7 @@ namespace Roglike.Tests
             Assert.AreEqual(1, MetaProgression.Data.totalRuns, "런 기록이 저장되지 않았습니다");
 
             yield return new WaitForSecondsRealtime(0.8f);
-            yield return Tap(Key.J);
+            yield return Tap(Key.A);
             Assert.IsTrue(shop.IsOpen, "결과 화면 다음에 강화소가 열려야 합니다");
 
             yield return new WaitForSecondsRealtime(0.5f);

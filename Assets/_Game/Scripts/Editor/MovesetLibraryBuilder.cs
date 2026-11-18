@@ -1,0 +1,107 @@
+using System;
+using Roglike.Data;
+using Roglike.Player;
+using UnityEditor;
+using UnityEngine;
+
+namespace Roglike.EditorTools
+{
+    public static class MovesetLibraryBuilder
+    {
+        private const string Folder = "Assets/_Game/Data/Player";
+
+        public static void Configure(PlayerCombat combat)
+        {
+            var serialized = new SerializedObject(combat);
+            SetArray(serialized, "_airCombo", new[]
+            {
+                Ensure("Air1", 0.8f, a => Air(a, new Vector2(1f, 1f))),
+                Ensure("Air2", 0.9f, a => Air(a, new Vector2(1.5f, 1f))),
+                Ensure("Air3", 1.3f, a => { Air(a, new Vector2(9f, -10f)); a.isFinisher = true; }),
+            });
+            SetArray(serialized, "_heavyCombo", new[]
+            {
+                Ensure("Heavy1", 1.8f, a => Heavy(a, false)),
+                Ensure("Heavy2", 2.4f, a => Heavy(a, true)),
+            });
+            serialized.FindProperty("_dashAttack").objectReferenceValue = Ensure("DashAttack", 1.6f, a =>
+            {
+                a.startup = 0.025f; a.active = 0.18f; a.recovery = 0.08f;
+                a.lungeSpeed = 21f; a.hitboxSize = new Vector2(2.4f, 1.4f);
+                a.knockback = new Vector2(8f, 2f); a.hitStop = 0.055f; a.shake = 0.25f;
+                Motion(a, Vector2.zero, true, true);
+            });
+            serialized.FindProperty("_launcher").objectReferenceValue = Ensure("Launcher", 1.4f, a =>
+            {
+                a.startup = 0.035f; a.active = 0.1f; a.recovery = 0.12f;
+                a.knockback = new Vector2(1.5f, 14f); a.hitStun = 0.65f;
+                a.hitboxOffset = new Vector2(0.9f, 0.25f); a.hitboxSize = new Vector2(2f, 2.5f);
+                a.slashAngle = 75f; a.hitStop = 0.07f; a.shake = 0.3f;
+                Motion(a, new Vector2(0f, 8f));
+            });
+            serialized.FindProperty("_plunge").objectReferenceValue = Ensure("Plunge", 2f, a =>
+            {
+                a.startup = 0f; a.active = 0.12f; a.recovery = 0.22f;
+                a.hitboxOffset = new Vector2(0f, -0.65f); a.hitboxSize = new Vector2(1.2f, 1.5f);
+                a.knockback = new Vector2(3f, 11f); a.hitStun = 0.45f;
+                a.hitStop = 0.1f; a.shake = 0.5f; a.slashAngle = -90f;
+                Motion(a, new Vector2(0f, -32f), false, true);
+            });
+            serialized.FindProperty("_chargedStrike").objectReferenceValue = Ensure("ChargedStrike", 4.5f, a =>
+            {
+                Heavy(a, true);
+                a.startup = 0.1f; a.active = 0.15f; a.recovery = 0.3f;
+                a.hitboxOffset = new Vector2(1.7f, 0.1f); a.hitboxSize = new Vector2(4f, 2.4f);
+                a.knockback = new Vector2(15f, 8f); a.hitStop = 0.16f; a.shake = 0.75f;
+                a.overdriveGain = 14f;
+            });
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static void Air(AttackData attack, Vector2 knockback)
+        {
+            attack.startup = 0.025f; attack.active = 0.07f; attack.recovery = 0.12f; attack.cancelTime = 0.1f;
+            attack.lungeSpeed = 2f; attack.knockback = knockback; attack.hitStun = 0.3f;
+            attack.hitboxSize = new Vector2(2f, 1.8f); attack.hitStop = 0.035f; attack.shake = 0.12f;
+        }
+
+        private static void Heavy(AttackData attack, bool finisher)
+        {
+            attack.startup = 0.15f; attack.active = 0.09f; attack.recovery = 0.12f; attack.cancelTime = 0.24f;
+            attack.lungeSpeed = 3f; attack.knockback = new Vector2(finisher ? 10f : 4f, 3f);
+            attack.hitboxSize = new Vector2(2.8f, 1.8f); attack.hitboxOffset = new Vector2(1.2f, 0.1f);
+            attack.hitStun = 0.4f; attack.hitStop = finisher ? 0.11f : 0.09f;
+            attack.shake = finisher ? 0.5f : 0.35f; attack.isFinisher = finisher;
+        }
+
+        private static void Motion(AttackData attack, Vector2 velocity, bool keepMomentum = false, bool movingHits = false)
+        {
+            var serialized = new SerializedObject(attack);
+            serialized.FindProperty("_selfVelocity").vector2Value = velocity;
+            serialized.FindProperty("_keepMomentum").boolValue = keepMomentum;
+            serialized.FindProperty("_hitsWhileMoving").boolValue = movingHits;
+            serialized.ApplyModifiedPropertiesWithoutUndo();
+        }
+
+        private static AttackData Ensure(string name, float damage, Action<AttackData> configure)
+        {
+            string path = $"{Folder}/{name}.asset";
+            AttackData existing = AssetDatabase.LoadAssetAtPath<AttackData>(path);
+            if (existing != null) return existing;
+            var attack = ScriptableObject.CreateInstance<AttackData>();
+            attack.damageMultiplier = damage;
+            configure(attack);
+            AssetDatabase.CreateAsset(attack, path);
+            AssetDatabase.SaveAssets();
+            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
+            return AssetDatabase.LoadAssetAtPath<AttackData>(path);
+        }
+
+        private static void SetArray(SerializedObject serialized, string field, AttackData[] attacks)
+        {
+            SerializedProperty property = serialized.FindProperty(field);
+            property.arraySize = attacks.Length;
+            for (int i = 0; i < attacks.Length; i++) property.GetArrayElementAtIndex(i).objectReferenceValue = attacks[i];
+        }
+    }
+}

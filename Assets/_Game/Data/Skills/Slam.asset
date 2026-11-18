@@ -1,0 +1,34 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 054d81d2854e60943bbf78c24754e2e7, type: 3}
+  m_Name: Slam
+  m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.SlamSkill
+  _id: Slam
+  _displayName: "\uB0B4\uB824\uCC0D\uAE30"
+  _shortName: "\uAC15\uD0C0"
+  _description: "\uB6F0\uC5B4\uC62C\uB77C \uB0B4\uB824\uCC0D\uACE0 \uC8FC\uBCC0 \uC801\uC744
+    \uB744\uC6B4\uB2E4."
+  _color: {r: 1, g: 0.65, b: 0.2, a: 1}
+  _cooldown: 7
+  _damageMultiplier: 3.2
+  _hitStop: 0.12
+  _shake: 0.65
+  _overdriveGain: 10
+  _hopDuration: 0.12
+  _hopSpeed: 12
+  _diveSpeed: 32
+  _maxDiveDuration: 1
+  _hitbox: {x: 5, y: 2}
+  _knockback: {x: 10, y: 14}
+  _hitStun: 0.45
+  _slashSize: {x: 6, y: 3}
+  _visualDuration: 0.3

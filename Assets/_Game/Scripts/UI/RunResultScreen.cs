@@ -40,9 +40,10 @@ namespace Roglike.UI
 
             _hint = UiFactory.CreateText("Hint", canvas.transform, 30, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Place(_hint, new Vector2(0f, -300f), new Vector2(1200f, 60f));
-            _hint.text = "J / Space / Enter  다시 시작";
+            _hint.text = "A / J / Space / Enter  다시 시작";
 
             _confirm = new InputAction("Restart", InputActionType.Button);
+            _confirm.AddBinding("<Keyboard>/a");
             _confirm.AddBinding("<Keyboard>/j");
             _confirm.AddBinding("<Keyboard>/space");
             _confirm.AddBinding("<Keyboard>/enter");
@@ -61,7 +62,7 @@ namespace Roglike.UI
         {
             Show(summary, onContinue);
             _body.text += $"\n\n<color=#7FE3FF>결정 +{NumberFormat.ToKorean(crystalsEarned)}</color>";
-            _hint.text = "J / Space / Enter  계속 (강화소)";
+            _hint.text = "A / J / Space / Enter  계속 (강화소)";
         }
 
         public void Show(RunSummary summary, Action onRestart)

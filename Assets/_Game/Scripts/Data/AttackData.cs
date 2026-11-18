@@ -26,6 +26,20 @@ namespace Roglike.Data
         [Header("Motion")]
         public float lungeSpeed = 5f;
 
+        [SerializeField] private Vector2 _selfVelocity;
+        [SerializeField] private bool _keepMomentum;
+        [SerializeField] private bool _hitsWhileMoving;
+        [SerializeField] private Vector2 _landingHitboxSize = new Vector2(3f, 1.2f);
+        [SerializeField] private Vector2 _landingHitboxOffset = new Vector2(0f, -0.4f);
+        [SerializeField] private float _motionTimeout = 2f;
+
+        public Vector2 SelfVelocity => _selfVelocity;
+        public bool KeepMomentum => _keepMomentum;
+        public bool HitsWhileMoving => _hitsWhileMoving;
+        public Vector2 LandingHitboxSize => _landingHitboxSize;
+        public Vector2 LandingHitboxOffset => _landingHitboxOffset;
+        public float MotionTimeout => _motionTimeout;
+
         [Header("Feel")]
         [Tooltip("명중 시 정지 시간 (실시간 초)")]
         public float hitStop = 0.06f;

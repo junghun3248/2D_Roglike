@@ -67,7 +67,22 @@ namespace Roglike.Player
         private bool _airDashUsed;
         private float _attackTimer;
         private float _lungeVelocity;
+        private bool _keepAttackMomentum;
+        private float _timeSinceDash = float.PositiveInfinity;
+        public float TimeSinceDash => IsDashing ? 0f : _timeSinceDash;
+        public bool IsCharging { get; private set; }
         private float _hurtTimer;
+
+        private float _skillTimer;
+        private Vector2 _skillVelocity;
+        private bool _skillIgnoreGravity;
+        private bool _skillInvulnerable;
+        private bool _skillActionActive;
+
+        public bool IsInSkill => _skillActionActive || _skillTimer > 0f;
+        public bool IsPlunging { get; private set; }
+        public bool CanUseSkill => !IsHurt && (!IsInSkill || IsPlunging);
+        public float MoveSpeed => _moveSpeed * (_stats != null ? _stats.Get(StatType.MoveSpeed) : 1f);
 
         public bool IsGrounded { get; private set; }
         public bool IsDashing => _dashTimer > 0f;
@@ -77,7 +92,7 @@ namespace Roglike.Player
         public SpriteRenderer BodyRenderer => _bodyRenderer;
 
         /// <summary>공격을 시작할 수 있는 상태인지 (대시·피격 중 불가).</summary>
-        public bool CanAttack => !IsDashing && !IsHurt;
+        public bool CanAttack => !IsDashing && !IsHurt && !IsInSkill;
 
         private void Awake()
         {
@@ -117,7 +132,7 @@ namespace Roglike.Player
         {
             float dt = Time.deltaTime * TimeController.PlayerTimeMultiplier;
 
-            if (_input.JumpPressed)
+            if (_input.JumpPressed && !IsInSkill)
             {
                 _jumpBufferTimer = _jumpBufferTime;
             }
@@ -129,11 +144,12 @@ namespace Roglike.Player
                 _jumpCutPending = true;
             }
 
-            if (_input.DashPressed && _dashCooldownTimer <= 0f && !IsHurt && !(_airDashUsed && !IsGrounded))
+            if (_input.DashPressed && _dashCooldownTimer <= 0f && !IsHurt && (!IsInSkill || IsPlunging) && !(_airDashUsed && !IsGrounded))
             {
                 StartDash();
             }
 
+            _timeSinceDash = IsDashing ? 0f : _timeSinceDash + dt;
             _jumpBufferTimer -= dt;
             _dashCooldownTimer -= dt;
             _attackTimer -= dt;
@@ -162,7 +178,24 @@ namespace Roglike.Player
 
             UpdateGrounded();
 
-            if (IsDashing)
+            if (IsInSkill && !IsHurt)
+            {
+                if (_skillTimer > 0f)
+                {
+                    _velocity.x = _skillVelocity.x;
+                    if (_skillIgnoreGravity) _velocity.y = _skillVelocity.y;
+                    else UpdateGravity(dt);
+                    if (_skillInvulnerable)
+                        _health?.SetInvulnerable(Mathf.Min(dt, _skillTimer) / multiplier);
+                    _skillTimer = Mathf.Max(0f, _skillTimer - dt);
+                }
+                else
+                {
+                    // 물리 타이머 종료와 코루틴 재개 사이에도 입력이 동작을 끊지 못한다.
+                    _velocity = Vector2.zero;
+                }
+            }
+            else if (IsDashing)
             {
                 _dashTimer -= dt;
                 _velocity = new Vector2(Facing * _dashSpeed, 0f);
@@ -183,20 +216,88 @@ namespace Roglike.Player
         }
 
         /// <summary>공격 시작 시 호출. 전진 속도와 공격 모션 시간(이동 제한)을 준다.</summary>
-        public void BeginAttack(float lungeSpeed, float duration)
+        public void BeginAttack(float lungeSpeed, float duration, Vector2 selfVelocity = default, bool keepMomentum = false)
         {
+            IsCharging = false;
+            _dashTimer = 0f;
+            _keepAttackMomentum = keepMomentum;
             _attackTimer = duration;
             _attackInterrupted = false;
             _lungeVelocity = lungeSpeed * Facing;
-            if (!IsGrounded && _velocity.y < 0f)
+            if (keepMomentum) _lungeVelocity = Facing * Mathf.Max(Mathf.Abs(_velocity.x), Mathf.Abs(_lungeVelocity));
+            if (selfVelocity != Vector2.zero)
             {
-                _velocity.y = 0f;
+                _lungeVelocity = selfVelocity.x * Facing;
+                _velocity.y = selfVelocity.y;
+                _jumpRising = false;
+                _jumpCutPending = false;
+                if (selfVelocity.y > 0f) IsGrounded = false;
             }
+            else if (!IsGrounded && _velocity.y < 0f) _velocity.y = 0f;
+            if (selfVelocity != Vector2.zero || keepMomentum || !IsGrounded)
+            {
+                _rigidbody.linearVelocity = new Vector2(_lungeVelocity, _velocity.y) * TimeController.PlayerTimeMultiplier;
+                _lastMultiplier = TimeController.PlayerTimeMultiplier;
+            }
+        }
+
+        public void SetCharging(bool charging)
+        {
+            IsCharging = charging;
+        }
+
+        public void BeginSkillMotion(Vector2 velocity, float duration, bool ignoreGravity, bool invulnerable)
+        {
+            if (IsHurt) return;
+            bool continuing = _skillTimer > 0f;
+            CancelAttack();
+            _dashTimer = 0f;
+            _jumpBufferTimer = 0f;
+            _jumpCutPending = false;
+            _jumpRising = false;
+            _skillVelocity = velocity;
+            _skillTimer = Mathf.Max(0f, duration);
+            _skillIgnoreGravity = ignoreGravity;
+            _skillInvulnerable = invulnerable;
+            if (!continuing || ignoreGravity) _velocity.y = velocity.y;
+            _velocity.x = velocity.x;
+            _rigidbody.linearVelocity = _velocity * TimeController.PlayerTimeMultiplier;
+            _lastMultiplier = TimeController.PlayerTimeMultiplier;
+            // 중도 취소·감속 배율 변경 후 무적이 남지 않도록 한 물리 스텝씩 갱신한다.
+            if (invulnerable && duration > 0f)
+                _health?.SetInvulnerable(Mathf.Min(duration / TimeController.PlayerTimeMultiplier, Time.fixedDeltaTime));
+        }
+
+        public void BeginPlunge(Vector2 velocity, float duration)
+        {
+            BeginSkillMotion(velocity, duration, true, false);
+            IsPlunging = true;
+        }
+
+        public void EndSkillMotion()
+        {
+            IsPlunging = false;
+            _skillActionActive = false;
+            _skillTimer = 0f;
+            _skillInvulnerable = false;
+            if (!IsHurt)
+            {
+                _velocity = Vector2.zero;
+                _rigidbody.linearVelocity = Vector2.zero;
+            }
+        }
+
+        internal void SetSkillActionActive(bool active)
+        {
+            if (active && IsPlunging) EndSkillMotion();
+            if (active) CancelAttack();
+            _skillActionActive = active;
         }
 
         /// <summary>공격 중 입력 방향으로 돌아보기 (콤보 사이 방향 전환 허용).</summary>
         public void FaceInputDirection()
         {
+            if (IsInSkill) return;
             float x = _input.MoveX;
             if (Mathf.Abs(x) > 0.3f)
             {
@@ -206,6 +307,7 @@ namespace Roglike.Player
 
         public void CancelAttack()
         {
+            IsCharging = false;
             if (IsAttacking)
             {
                 _attackInterrupted = true;
@@ -225,6 +327,7 @@ namespace Roglike.Player
 
         private void StartDash()
         {
+            if (IsPlunging) EndSkillMotion();
             FaceInputDirection();
             CancelAttack();
             _dashTimer = _dashDuration;
@@ -267,9 +370,15 @@ namespace Roglike.Player
                 return;
             }
 
+            if (IsCharging)
+            {
+                _velocity.x = 0f;
+                return;
+            }
+
             if (IsAttacking)
             {
-                _lungeVelocity *= Mathf.Exp(-_attackLungeDecay * dt);
+                if (!_keepAttackMomentum) _lungeVelocity *= Mathf.Exp(-_attackLungeDecay * dt);
                 _velocity.x = _lungeVelocity;
                 return;
             }
@@ -349,6 +458,8 @@ namespace Roglike.Player
                 return;
             }
 
+            _skillActionActive = false;
+            EndSkillMotion();
             CancelAttack();
             _dashTimer = 0f;
             _hurtTimer = Mathf.Max(0.25f, info.HitStun);
