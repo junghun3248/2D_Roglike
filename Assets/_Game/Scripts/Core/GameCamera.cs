@@ -34,6 +34,7 @@ namespace Roglike.Core
         [SerializeField] private float _minX = -30f;
         [SerializeField] private float _maxX = 30f;
 
+        private bool _roomBounds;
         private Camera _camera;
         private Vector2 _position;
         private float _trauma;
@@ -61,6 +62,14 @@ namespace Roglike.Core
             {
                 Instance = null;
             }
+        }
+
+        public void SetBounds(float minX, float maxX)
+        {
+            _minX = minX;
+            _maxX = Mathf.Max(minX, maxX);
+            _roomBounds = true;
+            _clampX = true;
         }
 
         public void SetTarget(Transform target)
@@ -100,9 +109,14 @@ namespace Roglike.Core
                 desired = Vector2.Lerp(desired, _punchFocus, _punchFocusWeight);
             }
 
+            if (_roomBounds)
+            {
+                float halfWidth = Mathf.Min(_camera.orthographicSize * _camera.aspect, (_maxX - _minX) * 0.5f);
+                desired.x = Mathf.Clamp(desired.x, _minX + halfWidth, _maxX - halfWidth);
+            }
             float followSharpness = punching ? _punchZoomSharpness : _followSharpness;
             _position = Vector2.Lerp(_position, desired, 1f - Mathf.Exp(-followSharpness * dt));
-            if (_clampX)
+            if (_clampX && !_roomBounds)
             {
                 _position.x = Mathf.Clamp(_position.x, _minX, _maxX);
             }

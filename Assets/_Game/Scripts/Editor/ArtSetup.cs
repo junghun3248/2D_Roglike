@@ -110,6 +110,84 @@ namespace Roglike.EditorTools
 
         private static Sprite Load(string name) => AssetDatabase.LoadAssetAtPath<Sprite>($"{Generated}/{name}.png");
 
+        /// <summary>Generated 폴더 바로 아래의 단일 그림 (없으면 null → 호출 쪽이 자리표시를 쓴다).</summary>
+        public static Sprite GeneratedSprite(string name) => Available ? Load(name) : null;
+
+        /// <summary>
+        /// 새 적 프리팹(멧돼지·다람쥐·사슴왕)에 그림을 입힌다. Visual 아래 자리표시 도형을 지우고 그림 렌더러 하나("Art")를 둔다.
+        /// 이미 입혔으면 애니메이션만 갱신한다. states: (AI 상태 이름, 그림 폴더 이름, fps, 반복).
+        /// </summary>
+        public static void ApplyToEnemyPrefab(string prefabPath, float feetY, string idleName,
+            params (string state, string animation, float fps, bool loop)[] states)
+        {
+            if (!Available || !AssetDatabase.IsValidFolder($"{Generated}/{idleName}"))
+            {
+                return;
+            }
+
+            SpriteAnimationData idle = Animation(idleName, 5f, true);
+            GameObject root = PrefabUtility.LoadPrefabContents(prefabPath);
+            try
+            {
+                Transform visual = root.transform.Find("Visual");
+                Transform artTransform = visual.Find("Art");
+                if (artTransform == null)
+                {
+                    foreach (Transform child in visual.Cast<Transform>().ToArray())
+                    {
+                        Object.DestroyImmediate(child.gameObject);
+                    }
+
+                    artTransform = new GameObject("Art").transform;
+                    artTransform.SetParent(visual, false);
+                    artTransform.gameObject.AddComponent<SpriteRenderer>();
+                }
+
+                artTransform.gameObject.layer = root.layer;
+                artTransform.localPosition = new Vector3(0f, feetY, 0f);
+                artTransform.localScale = Vector3.one;
+                var renderer = artTransform.GetComponent<SpriteRenderer>();
+                renderer.sprite = idle.frames[0];
+                renderer.color = Color.white;
+                renderer.sortingOrder = 10;
+                renderer.sharedMaterial = FlashMaterial();
+
+                if (!artTransform.TryGetComponent(out SpriteAnimator animator))
+                {
+                    animator = artTransform.gameObject.AddComponent<SpriteAnimator>();
+                }
+
+                if (!root.TryGetComponent(out EnemySpriteAnimations animations))
+                {
+                    animations = root.AddComponent<EnemySpriteAnimations>();
+                }
+
+                SetObject(animations, "_animator", animator);
+                SetObject(animations, "_idle", idle);
+                Modify(animations, "_stateClips", p =>
+                {
+                    p.arraySize = states.Length;
+                    for (int i = 0; i < states.Length; i++)
+                    {
+                        SerializedProperty element = p.GetArrayElementAtIndex(i);
+                        element.FindPropertyRelative("state").stringValue = states[i].state;
+                        element.FindPropertyRelative("clip").objectReferenceValue = Animation(states[i].animation, states[i].fps, states[i].loop);
+                    }
+                });
+
+                if (root.TryGetComponent(out HitFlash flash))
+                {
+                    SetObjectArray(flash, "_renderers", new Object[] { renderer });
+                }
+
+                PrefabUtility.SaveAsPrefabAsset(root, prefabPath);
+            }
+            finally
+            {
+                PrefabUtility.UnloadPrefabContents(root);
+            }
+        }
+
         // ---------- 플레이어 ----------
 
         /// <summary>자리표시 몸통을 주인공 스프라이트로 바꾼다. 몸통 렌더러는 그대로 재사용(잔상·충전 색·HitFlash가 참조).</summary>

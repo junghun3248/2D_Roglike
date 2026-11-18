@@ -91,11 +91,11 @@ namespace Roglike.EditorTools
         {
             Scene scene = BeginScene();
             AttackData[] combo = EnsureCombo();
-            GameObject slimePrefab = EnsureSlimePrefab();
+            GameObject[] enemyPool = { EnemyPrefabBuilder.EnsureBoar(), EnemyPrefabBuilder.EnsureSquirrel() };
 
             GameObject player = CreatePlayer(combo, SkillLibraryBuilder.EnsureDefaultSkills());
             CreateLevel();
-            CreateSpawner(slimePrefab);
+            CreateSpawner(enemyPool);
             CreateCamera(player.transform);
             CreateSystems(player);
 
@@ -109,49 +109,30 @@ namespace Roglike.EditorTools
         {
             Scene scene = BeginScene();
             AttackData[] combo = EnsureCombo();
-            GameObject slimePrefab = EnsureSlimePrefab();
-            GameObject bossPrefab = EnsureBossPrefab(slimePrefab);
+            GameObject[] enemyPool = { EnemyPrefabBuilder.EnsureBoar(), EnemyPrefabBuilder.EnsureSquirrel() };
+            GameObject bossPrefab = EnemyPrefabBuilder.EnsureStagKing();
             UpgradeData[] upgrades = UpgradeLibraryBuilder.EnsureDefaultUpgrades();
             SynergyData[] synergies = SynergyLibraryBuilder.EnsureDefaultSynergies();
             MetaUpgradeData[] metaUpgrades = MetaLibraryBuilder.EnsureDefaultMetaUpgrades();
-            RunConfig config = EnsureRunConfig(slimePrefab, bossPrefab);
+            RunConfig config = EnsureRunConfig(enemyPool, bossPrefab);
 
             SkillDefinition[] skills = SkillLibraryBuilder.EnsureDefaultSkills();
             GameObject player = CreatePlayer(combo, new[] { skills[0] });
             SetBool(player.GetComponent<PlayerDeath>(), "_restartOnDeath", false);
             SetBool(player.GetComponent<OverdriveController>(), "_startFull", false);
 
-            CreateLevel();
+            var background = new GameObject("Background").transform;
+            if (!ArtSetup.CreateBackground(background)) CreatePlaceholderBackground(background);
+            Room[] rooms = RoomLayoutBuilder.Build(config.areas[0], _square, ArtSetup.GeneratedSprite("gate_closed"), ArtSetup.GeneratedSprite("gate_open"));
+            player.transform.position = rooms[0].PlayerEntry.position;
             CreateCamera(player.transform);
             CreateSystems(player);
-
             var runObject = new GameObject("Run");
-            var playerSpawn = new GameObject("PlayerSpawn").transform;
-            playerSpawn.SetParent(runObject.transform, false);
-            playerSpawn.position = new Vector3(0f, 1.2f, 0f);
-            var bossSpawn = new GameObject("BossSpawn").transform;
-            bossSpawn.SetParent(runObject.transform, false);
-            bossSpawn.position = new Vector3(10f, 3f, 0f);
-
-            Vector2[] points =
-            {
-                new Vector2(-24f, 1.5f), new Vector2(-14f, 1.5f), new Vector2(-6f, 1.5f), new Vector2(7f, 1.5f),
-                new Vector2(15f, 1.5f), new Vector2(25f, 1.5f), new Vector2(-12f, 4.5f), new Vector2(6f, 5f),
-                new Vector2(19f, 6.5f), new Vector2(-25f, 7f),
-            };
-            var spawnPoints = new Object[points.Length];
-            for (int i = 0; i < points.Length; i++)
-            {
-                var point = new GameObject("SpawnPoint" + i).transform;
-                point.SetParent(runObject.transform, false);
-                point.position = points[i];
-                spawnPoints[i] = point;
-            }
 
             var ui = new GameObject("RunUI");
             var upgradeChoice = ui.AddComponent<UpgradeChoiceUI>();
             var bossBar = ui.AddComponent<BossHealthBar>();
-            var fader = ui.AddComponent<ScreenFader>();
+            var restChoice = ui.AddComponent<RestChoiceUI>();
             var result = ui.AddComponent<RunResultScreen>();
             var synergyPanel = ui.AddComponent<SynergyPanelUI>();
             var metaShop = ui.AddComponent<MetaShopUI>();
@@ -160,12 +141,10 @@ namespace Roglike.EditorTools
             SetObject(run, "_config", config);
             SetObjectArray(run, "_upgrades", upgrades);
             SetObject(run, "_player", player.GetComponent<PlayerStats>());
-            SetObject(run, "_playerSpawn", playerSpawn);
-            SetObject(run, "_bossSpawn", bossSpawn);
-            SetObjectArray(run, "_spawnPoints", spawnPoints);
+            SetObjectArray(run, "_rooms", rooms);
             SetObject(run, "_upgradeChoice", upgradeChoice);
             SetObject(run, "_bossBar", bossBar);
-            SetObject(run, "_fader", fader);
+            SetObject(run, "_restChoice", restChoice);
             SetObject(run, "_result", result);
             SetObjectArray(run, "_synergies", synergies);
             SetObjectArray(run, "_metaUpgrades", metaUpgrades);
@@ -224,39 +203,46 @@ namespace Roglike.EditorTools
             return AssetDatabase.LoadAssetAtPath<GameObject>(BossPrefabPath) ?? prefab;
         }
 
-        private static RunConfig EnsureRunConfig(GameObject slimePrefab, GameObject bossPrefab)
+        private static RunConfig EnsureRunConfig(GameObject[] enemyPool, GameObject bossPrefab)
         {
-            var existing = AssetDatabase.LoadAssetAtPath<RunConfig>(RunConfigPath);
-            if (existing != null)
+            var config = AssetDatabase.LoadAssetAtPath<RunConfig>(RunConfigPath);
+            bool creating = config == null;
+            if (creating)
             {
-                return existing;
+                EnsureFolder(Root + "/Data/Run");
+                config = ScriptableObject.CreateInstance<RunConfig>();
             }
-
-            EnsureFolder(Root + "/Data/Run");
-            var config = ScriptableObject.CreateInstance<RunConfig>();
-            config.bossPrefab = bossPrefab;
-            config.rooms = new[]
+            // 기존 에셋의 성장/보상 수치는 유지하고 구형 단일 전투장 데이터만 이관한다.
+            if (config.areas == null || config.areas.Length == 0)
             {
-                Room("초원", slimePrefab, 3, 4),
-                Room("언덕", slimePrefab, 4, 5),
-                Room("숲 입구", slimePrefab, 4, 5, 6),
-                Room("깊은 숲", slimePrefab, 5, 6, 7),
-            };
-            AssetDatabase.CreateAsset(config, RunConfigPath);
+                config.areas = new[]
+                {
+                    new AreaConfig
+                    {
+                        displayName = "멈춘 숲", enemyPool = enemyPool, boss = bossPrefab,
+                        rooms = new[]
+                        {
+                            Room("입구", RoomType.Entrance, 0),
+                            Room("숲길", RoomType.Combat, 1, 3, 4),
+                            Room("멈춘 나뭇가지", RoomType.Combat, 2, 4, 5, 6),
+                            Room("휴식", RoomType.Rest, 3),
+                            Room("엘리트!", RoomType.Elite, 4, 2),
+                            Room("태엽 사슴왕", RoomType.Boss, 5),
+                        }
+                    }
+                };
+                EditorUtility.SetDirty(config);
+            }
+            if (creating) AssetDatabase.CreateAsset(config, RunConfigPath);
             AssetDatabase.SaveAssets();
-            AssetDatabase.ImportAsset(RunConfigPath, ImportAssetOptions.ForceSynchronousImport);
-            return AssetDatabase.LoadAssetAtPath<RunConfig>(RunConfigPath);
+            return config;
         }
 
-        private static RoomEntry Room(string name, GameObject prefab, params int[] waveCounts)
+        private static RoomEntry Room(string name, RoomType type, int layout, params int[] waveCounts)
         {
             var waves = new WaveEntry[waveCounts.Length];
-            for (int i = 0; i < waveCounts.Length; i++)
-            {
-                waves[i] = new WaveEntry { enemyPrefab = prefab, count = waveCounts[i] };
-            }
-
-            return new RoomEntry { name = name, waves = waves };
+            for (int i = 0; i < waveCounts.Length; i++) waves[i] = new WaveEntry { count = waveCounts[i] };
+            return new RoomEntry { name = name, type = type, layout = layout, waves = waves };
         }
 
         // ---------- 플레이어 ----------
@@ -354,7 +340,7 @@ namespace Roglike.EditorTools
         // 킹 슬라임: 같은 그림을 2.6배, 푸른 빛. 콜라이더 2.6x2 → 발밑 y -1.
         private static void ApplyBossArt() => ArtSetup.ApplyToSlimePrefab(BossPrefabPath, 2.6f, new Color(0.6f, 0.85f, 1f), -1f, "Eye", new Vector2(0f, 2.05f));
 
-        private static void CreateSpawner(GameObject slimePrefab)
+        private static void CreateSpawner(GameObject[] enemyPool)
         {
             var spawner = new GameObject("EnemySpawner");
             Vector2[] points =
@@ -373,7 +359,8 @@ namespace Roglike.EditorTools
             }
 
             var component = spawner.AddComponent<EnemySpawner>();
-            SetObject(component, "_enemyPrefab", slimePrefab);
+            SetObject(component, "_enemyPrefab", enemyPool[0]);
+            SetObjectArray(component, "_enemyPool", enemyPool);
             SetObjectArray(component, "_spawnPoints", transforms);
             SetInt(component, "_maxAlive", 6);
         }
@@ -426,7 +413,7 @@ namespace Roglike.EditorTools
             CreateSolid("Platform4", level, new Vector2(-25f, 5.5f), new Vector2(6f, 0.5f), platformColor, grassColor, true);
         }
 
-        private static void CreateSolid(string name, Transform parent, Vector2 center, Vector2 size, Color color, Color? topColor, bool oneWay)
+        internal static void CreateSolid(string name, Transform parent, Vector2 center, Vector2 size, Color color, Color? topColor, bool oneWay)
         {
             var go = new GameObject(name) { layer = GameLayers.Ground };
             go.transform.SetParent(parent, false);
@@ -490,6 +477,8 @@ namespace Roglike.EditorTools
             SetObject(vfx, "_square", _square);
             SetObject(vfx, "_circle", _circle);
             SetObject(vfx, "_material", _material);
+            SetObject(vfx, "_gearProjectile", ArtSetup.GeneratedSprite("gear_projectile"));
+            SetObject(vfx, "_leafProjectile", ArtSetup.GeneratedSprite("leaf_projectile"));
 
             systems.AddComponent<DamageNumberSpawner>();
 

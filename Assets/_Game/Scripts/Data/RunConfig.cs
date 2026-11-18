@@ -14,16 +14,17 @@ namespace Roglike.Data
     public class RoomEntry
     {
         public string name = "구역";
+        public RoomType type = RoomType.Combat;
+        public int layout;
         [Tooltip("순서대로 나온다. 한 웨이브를 다 잡으면 다음 웨이브")]
         public WaveEntry[] waves;
     }
 
-    /// <summary>한 런의 구성: 일반 구역들 → 보스. 숫자 폭발 체감을 위해 적 체력은 구역마다 곱으로 늘어난다.</summary>
+    /// <summary>한 런의 구성: 지역별 고정 방 → 지역 보스. 숫자 폭발 체감을 위해 적 체력은 구역마다 곱으로 늘어난다.</summary>
     [CreateAssetMenu(menuName = "Roglike/Run Config", fileName = "RunConfig")]
     public class RunConfig : ScriptableObject
     {
-        public RoomEntry[] rooms;
-        public GameObject bossPrefab;
+        public AreaConfig[] areas;
 
         [Header("Scaling")]
         [Tooltip("구역 하나 지날 때마다 적 체력에 곱하는 값")]
@@ -35,6 +36,7 @@ namespace Roglike.Data
         [Tooltip("구역 클리어 시 최대 체력 대비 회복 비율")]
         [Range(0f, 1f)] public float healOnRoomClear = 0.25f;
         public int upgradeChoices = 3;
+        [Range(0f, 1f)] public float healOnRest = 0.4f;
         [Tooltip("켜면 구역 클리어뿐 아니라 웨이브를 정리할 때마다 강화를 고른다 (시너지를 모을 기회를 늘림)")]
         public bool upgradeAfterEveryWave = true;
     }

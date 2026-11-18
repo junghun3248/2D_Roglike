@@ -11,16 +11,23 @@ namespace Roglike.Combat
         [SerializeField] private Sprite _square;
         [SerializeField] private Sprite _circle;
         [SerializeField] private Material _material;
+        [Header("투사체 그림 (없으면 자리표시 도형)")]
+        [SerializeField] private Sprite _gearProjectile;
+        [SerializeField] private Sprite _leafProjectile;
 
         public static Sprite Square { get; private set; }
         public static Sprite Circle { get; private set; }
         public static Material Material { get; private set; }
+        public static Sprite GearSprite { get; private set; }
+        public static Sprite LeafSprite { get; private set; }
 
         private void Awake()
         {
             Square = _square;
             Circle = _circle;
             Material = _material;
+            GearSprite = _gearProjectile;
+            LeafSprite = _leafProjectile;
         }
 
         public static SpriteRenderer CreateRenderer(string name, Sprite sprite, Color color, int sortingOrder)

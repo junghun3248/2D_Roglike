@@ -21,6 +21,9 @@ namespace Roglike.Progression
         }
 
         public List<UpgradeData> Roll(int count)
+            => Roll(count, UpgradeRarity.Common);
+
+        public List<UpgradeData> Roll(int count, UpgradeRarity minRarity)
         {
             var result = new List<UpgradeData>();
             if (count <= 0) return result;
@@ -30,6 +33,7 @@ namespace Roglike.Progression
             foreach (UpgradeData upgrade in _all)
             {
                 if (upgrade == null || Stacks(upgrade) >= upgrade.maxStacks) continue;
+                if (upgrade.rarity < minRarity) continue;
                 candidates.Add(upgrade);
                 totalWeight += Weight(upgrade.rarity);
             }
@@ -54,6 +58,15 @@ namespace Roglike.Progression
                 }
             }
 
+            // 희귀 후보를 먼저 뽑고, 부족한 자리만 다른 희귀도로 채운다.
+            if (result.Count < count && minRarity > UpgradeRarity.Common)
+            {
+                foreach (UpgradeData upgrade in Roll(_all.Count))
+                {
+                    if (!result.Contains(upgrade)) result.Add(upgrade);
+                    if (result.Count >= count) break;
+                }
+            }
             return result;
         }
 

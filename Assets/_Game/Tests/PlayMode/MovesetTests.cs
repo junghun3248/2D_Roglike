@@ -49,7 +49,7 @@ namespace Roglike.Tests
             _hitCount = 0;
             EnemySpawner spawner = Object.FindFirstObjectByType<EnemySpawner>();
             if (spawner != null) Object.Destroy(spawner.gameObject);
-            _slimes = Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None);
+            _slimes = CombatTestTargets.ReplaceSceneEnemies(2);
             Assert.GreaterOrEqual(_slimes.Length, 2);
             foreach (SlimeEnemy slime in _slimes)
             {

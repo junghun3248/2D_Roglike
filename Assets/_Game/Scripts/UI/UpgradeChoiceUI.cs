@@ -35,6 +35,7 @@ namespace Roglike.UI
         private int _selected;
         private float _shownAt;
 
+        public IReadOnlyList<UpgradeData> Options => _options;
         public bool IsOpen { get; private set; }
         public int RerollsLeft { get; private set; }
 
@@ -243,7 +244,7 @@ namespace Roglike.UI
             callback?.Invoke(chosen);
         }
 
-        private void Hide()
+        public void Hide()
         {
             IsOpen = false;
             _onChosen = null;

@@ -40,7 +40,7 @@ namespace Roglike.UI
             }
 
             int room = Mathf.Min(_run.RoomIndex + 1, _run.RoomCount);
-            _progress.text = _run.IsBossRoom ? $"보스  ({room} / {_run.RoomCount})" : $"{room}구역 / {_run.RoomCount}";
+            _progress.text = _run.IsBossRoom ? $"{_run.AreaIndex + 1}지역 · 보스" : $"{_run.AreaIndex + 1}지역 · 방 {room}/{_run.RoomCount}";
 
             int minutes = Mathf.FloorToInt(_run.ElapsedSeconds / 60f);
             int seconds = Mathf.FloorToInt(_run.ElapsedSeconds % 60f);
@@ -68,7 +68,7 @@ namespace Roglike.UI
             float t = Mathf.Clamp01((Time.unscaledTime - _bannerShownAt) / 0.18f);
             float scale = Mathf.Lerp(1.6f, 1f, 1f - (1f - t) * (1f - t));
             _banner.rectTransform.localScale = new Vector3(scale, scale, 1f);
-            bool boss = text == "BOSS";
+            bool boss = text == "보스";
             bool clear = text == "CLEAR!";
             _banner.color = boss ? new Color(1f, 0.35f, 0.45f) : clear ? new Color(1f, 0.85f, 0.35f) : Color.white;
         }

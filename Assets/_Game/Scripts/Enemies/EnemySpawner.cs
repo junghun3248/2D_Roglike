@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using Random = UnityEngine.Random;
 using Roglike.Combat;
 using UnityEngine;
 
@@ -7,24 +9,20 @@ namespace Roglike.Enemies
     public class EnemySpawner : MonoBehaviour
     {
         [SerializeField] private GameObject _enemyPrefab;
+        [SerializeField] private GameObject[] _enemyPool;
         [SerializeField] private Transform[] _spawnPoints;
         [SerializeField] private int _maxAlive = 5;
         [SerializeField] private float _respawnDelay = 1.5f;
         [SerializeField] private float _minimumPlayerDistance = 4f;
 
-        private readonly HashSet<SlimeEnemy> _alive = new HashSet<SlimeEnemy>();
+        private readonly Dictionary<Health, Action<DamageInfo>> _alive = new Dictionary<Health, Action<DamageInfo>>();
+        private readonly List<Health> _destroyed = new List<Health>();
         private readonly List<float> _respawnTimers = new List<float>();
         private Health _player;
         private bool _warned;
 
         private void Start()
         {
-            if (_enemyPrefab == null || _enemyPrefab.GetComponent<SlimeEnemy>() == null || ChooseSpawnPoint() == null)
-            {
-                WarnInvalidSetup();
-                return;
-            }
-
             foreach (Health health in FindObjectsByType<Health>(FindObjectsSortMode.None))
             {
                 if (health.Team == Team.Player)
@@ -42,6 +40,11 @@ namespace Roglike.Enemies
 
         private void Update()
         {
+            _destroyed.Clear();
+            foreach (Health enemy in _alive.Keys)
+                if (enemy == null) _destroyed.Add(enemy);
+            foreach (Health enemy in _destroyed) OnDespawned(enemy);
+
             for (int i = _respawnTimers.Count - 1; i >= 0; i--)
             {
                 _respawnTimers[i] -= Time.deltaTime;
@@ -53,23 +56,26 @@ namespace Roglike.Enemies
 
         private bool SpawnEnemy()
         {
+            GameObject prefab = _enemyPool != null && _enemyPool.Length > 0
+                ? _enemyPool[Random.Range(0, _enemyPool.Length)] : _enemyPrefab;
             Transform point = ChooseSpawnPoint();
-            if (_enemyPrefab == null || point == null)
+            if (prefab == null || point == null)
             {
                 WarnInvalidSetup();
                 return false;
             }
 
-            GameObject instance = Instantiate(_enemyPrefab, point.position, point.rotation);
-            SlimeEnemy enemy = instance.GetComponent<SlimeEnemy>();
-            if (enemy == null)
+            GameObject instance = Instantiate(prefab, point.position, point.rotation);
+            Health enemy = instance.GetComponent<Health>();
+            if (enemy == null || enemy.Team != Team.Enemy)
             {
                 Destroy(instance);
                 WarnInvalidSetup();
                 return false;
             }
-            _alive.Add(enemy);
-            enemy.Despawned += OnDespawned;
+            Action<DamageInfo> onDied = _ => OnDespawned(enemy);
+            _alive.Add(enemy, onDied);
+            enemy.Died += onDied;
             return true;
         }
 
@@ -94,17 +100,19 @@ namespace Roglike.Enemies
             return preferred != null ? preferred : fallback;
         }
 
-        private void OnDespawned(SlimeEnemy enemy)
+        private void OnDespawned(Health enemy)
         {
-            enemy.Despawned -= OnDespawned;
-            if (_alive.Remove(enemy)) _respawnTimers.Add(Mathf.Max(0f, _respawnDelay));
+            if (!_alive.TryGetValue(enemy, out Action<DamageInfo> onDied)) return;
+            if (enemy != null) enemy.Died -= onDied;
+            _alive.Remove(enemy);
+            _respawnTimers.Add(Mathf.Max(0f, _respawnDelay));
         }
 
         private void OnDestroy()
         {
-            foreach (SlimeEnemy enemy in _alive)
+            foreach (var entry in _alive)
             {
-                if (enemy != null) enemy.Despawned -= OnDespawned;
+                if (entry.Key != null) entry.Key.Died -= entry.Value;
             }
             _alive.Clear();
             _respawnTimers.Clear();
@@ -114,7 +122,7 @@ namespace Roglike.Enemies
         {
             if (_warned) return;
             _warned = true;
-            Debug.LogWarning("EnemySpawner requires a prefab with SlimeEnemy and at least one valid spawn point.", this);
+            Debug.LogWarning("EnemySpawner requires a prefab with enemy Health and at least one valid spawn point.", this);
         }
     }
 }

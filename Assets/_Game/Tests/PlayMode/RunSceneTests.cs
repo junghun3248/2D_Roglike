@@ -60,12 +60,19 @@ namespace Roglike.Tests
         }
 
         [UnityTest]
-        public IEnumerator Run_StartsInRoomOne_WithEnemies()
+        public IEnumerator Run_StartsInEntrance_ThenWalkingLocksCombatRoom()
         {
             var run = Object.FindFirstObjectByType<RunManager>();
             Assert.IsNotNull(run);
             Assert.AreEqual(0, run.RoomIndex);
-            Assert.AreEqual(5, run.RoomCount, "일반 4구역 + 보스");
+            Assert.AreEqual(6, run.RoomCount);
+            Assert.AreEqual(RoomType.Entrance, run.CurrentRoomType);
+            Assert.AreEqual(0, run.EnemiesAlive);
+            Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
+            yield return EnterNextRoom(run);
+            Assert.AreEqual(1, run.RoomIndex);
+            Assert.IsTrue(run.CurrentRoom.LeftDoorClosed);
+            Assert.IsFalse(run.CurrentRoom.RightDoorOpen);
             Assert.Greater(run.EnemiesAlive, 0, "적이 나오지 않았습니다");
             Assert.AreEqual(1, run.RerollsLeft, "기본 리롤 1회");
             yield return null;
@@ -78,6 +85,7 @@ namespace Roglike.Tests
             var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
             var stats = Object.FindFirstObjectByType<PlayerStats>();
 
+            yield return EnterNextRoom(Object.FindFirstObjectByType<RunManager>());
             yield return ClearUntil(() => choice.IsOpen, 30f);
             Assert.IsTrue(choice.IsOpen, "웨이브 정리 후 강화 선택이 뜨지 않았습니다");
             Assert.AreEqual(0f, Time.timeScale, "강화 선택 중 게임이 멈추지 않았습니다");
@@ -87,9 +95,14 @@ namespace Roglike.Tests
             Assert.IsFalse(choice.IsOpen, "1키로 선택되지 않았습니다");
             Assert.Greater(stats.Modifiers.Count, 0, "선택한 강화가 적용되지 않았습니다");
 
-            // 구역 끝까지 진행하면 다음 구역으로.
-            yield return PickUntil(() => run.RoomIndex >= 1, choice, 40f);
-            Assert.AreEqual(1, run.RoomIndex, "다음 구역으로 넘어가지 않았습니다");
+            yield return PickUntil(() => run.CurrentRoom.RightDoorOpen && choice.IsOpen, choice, 40f);
+            Assert.AreEqual(1, run.RoomIndex, "걸어가지 않으면 현재 방에 머물러야 합니다");
+            Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
+            Assert.IsTrue(choice.IsOpen, "클리어 보상이 필요합니다");
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.Digit1);
+            yield return EnterNextRoom(run);
+            Assert.AreEqual(2, run.RoomIndex);
             Assert.Greater(Time.timeScale, 0.1f);
         }
 
@@ -97,6 +110,7 @@ namespace Roglike.Tests
         public IEnumerator Reroll_ConsumesOneCharge()
         {
             var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
+            yield return EnterNextRoom(Object.FindFirstObjectByType<RunManager>());
             yield return ClearUntil(() => choice.IsOpen, 30f);
             yield return new WaitForSecondsRealtime(0.5f);
 
@@ -207,18 +221,22 @@ namespace Roglike.Tests
             yield return PickUntil(() => run.IsBossRoom, choice, 120f);
             Assert.IsTrue(run.IsBossRoom, "보스 구역에 도달하지 못했습니다");
 
-            BossSlime boss = null;
+            StagKingBoss boss = null;
             float waited = 0f;
             while (boss == null && waited < 10f)
             {
-                boss = Object.FindFirstObjectByType<BossSlime>();
+                boss = Object.FindFirstObjectByType<StagKingBoss>();
                 waited += 0.1f;
                 yield return new WaitForSecondsRealtime(0.1f);
             }
 
             Assert.IsNotNull(boss, "보스가 나오지 않았습니다");
             var bossHealth = boss.GetComponent<Health>();
-            Assert.Greater(bossHealth.Max, 2500, "보스 체력이 구역 성장 배율로 늘어나지 않았습니다");
+            var config = (RunConfig)typeof(RunManager).GetField("_config",
+                System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(run);
+            double expectedHealth = config.areas[0].boss.GetComponent<Health>().Max
+                * Mathf.Pow(config.enemyHealthGrowth, run.RoomIndex) * config.bossHealthMultiplier;
+            Assert.That(bossHealth.Max, Is.EqualTo(expectedHealth).Within(0.1));
 
             yield return new WaitForSecondsRealtime(1.5f);
             bossHealth.TryApplyDamage(new DamageInfo(bossHealth.Max * 0.6, false, boss.transform.position, Vector2.zero, 0f, null));
@@ -231,6 +249,63 @@ namespace Roglike.Tests
             Assert.Greater(run.Kills, 20);
             Assert.Greater(run.CrystalsEarned, 40, "승리 보상 결정이 들어오지 않았습니다");
             Assert.AreEqual(1, MetaProgression.Data.victories);
+        }
+
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Rest_OffersTwoChoices_AndHealsFortyPercent()
+        {
+            var run = Object.FindFirstObjectByType<RunManager>();
+            var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
+            var rest = Object.FindFirstObjectByType<RestChoiceUI>();
+            yield return PickUntil(() => rest.IsOpen, choice, 90f);
+            Assert.AreEqual(RoomType.Rest, run.CurrentRoomType);
+            Assert.IsFalse(run.CurrentRoom.RightDoorOpen);
+            Assert.AreEqual(0, run.EnemiesAlive);
+            Health health = PlayerHealth();
+            health.ClearInvulnerable();
+            health.TryApplyDamage(new DamageInfo(health.Max * 0.7, false, health.transform.position, Vector2.zero, 0f, null));
+            double before = health.Current;
+            health.SetInvulnerable(10000f);
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.Digit1);
+            Assert.IsFalse(rest.IsOpen);
+            Assert.That(health.Current, Is.EqualTo(before + health.Max * 0.4).Within(0.01));
+            Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
+        }
+
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Rest_UpgradeChoice_PrefersRareRewards()
+        {
+            var run = Object.FindFirstObjectByType<RunManager>();
+            var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
+            var rest = Object.FindFirstObjectByType<RestChoiceUI>();
+            yield return PickUntil(() => rest.IsOpen, choice, 90f);
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.Digit2);
+            Assert.IsTrue(choice.IsOpen);
+            Assert.IsFalse(run.CurrentRoom.RightDoorOpen);
+            foreach (UpgradeData option in choice.Options) Assert.AreNotEqual(UpgradeRarity.Common, option.rarity);
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.Digit1);
+            Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
+        }
+
+        [UnityTest, Timeout(120000)]
+        public IEnumerator Elite_SpawnsElites_AndOffersRareRewardsIncludingReroll()
+        {
+            var run = Object.FindFirstObjectByType<RunManager>();
+            var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
+            yield return PickUntil(() => run.CurrentRoomType == RoomType.Elite, choice, 90f);
+            Assert.GreaterOrEqual(run.EnemiesAlive, 1);
+            var elites = Object.FindObjectsByType<EliteModifier>(FindObjectsSortMode.None);
+            Assert.GreaterOrEqual(elites.Length, 1);
+            foreach (EliteModifier elite in elites) Assert.IsTrue(elite.IsElite);
+            yield return ClearUntil(() => choice.IsOpen, 20f);
+            Assert.IsTrue(choice.IsOpen);
+            foreach (UpgradeData option in choice.Options) Assert.AreNotEqual(UpgradeRarity.Common, option.rarity);
+            yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.R);
+            foreach (UpgradeData option in choice.Options) Assert.AreNotEqual(UpgradeRarity.Common, option.rarity);
         }
 
         private static Health PlayerHealth()
@@ -264,17 +339,47 @@ namespace Roglike.Tests
                     continue;
                 }
 
+                var rest = Object.FindFirstObjectByType<RestChoiceUI>();
+                if (rest.IsOpen)
+                {
+                    yield return new WaitForSecondsRealtime(0.45f);
+                    yield return Tap(Key.Digit1);
+                    elapsed += 0.65f;
+                    continue;
+                }
+                var run = Object.FindFirstObjectByType<RunManager>();
+                if (run.CurrentRoom.RightDoorOpen && run.RoomIndex + 1 < run.RoomCount)
+                {
+                    yield return EnterNextRoom(run);
+                    elapsed += 1.2f;
+                    continue;
+                }
                 KillEnemies();
                 elapsed += 0.2f;
                 yield return new WaitForSecondsRealtime(0.2f);
             }
+            Assert.IsTrue(done(), "제한 시간 안에 목표 흐름에 도달하지 못했습니다");
+        }
+
+        private static IEnumerator EnterNextRoom(RunManager run)
+        {
+            Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
+            float boundary = run.CurrentRoom.MaxX;
+            var player = PlayerHealth();
+            var body = player.GetComponent<Rigidbody2D>();
+            Vector3 position = new Vector3(boundary + 2.5f, 1.2f, 0f);
+            body.position = position;
+            body.linearVelocity = Vector2.zero;
+            player.transform.position = position;
+            Physics2D.SyncTransforms();
+            yield return new WaitForSecondsRealtime(1.2f);
         }
 
         private static void KillEnemies()
         {
             foreach (Health health in Object.FindObjectsByType<Health>(FindObjectsSortMode.None))
             {
-                if (health.Team == Team.Enemy && !health.IsDead && health.GetComponent<BossSlime>() == null)
+                if (health.Team == Team.Enemy && !health.IsDead && health.GetComponent<IBoss>() == null)
                 {
                     health.TryApplyDamage(new DamageInfo(health.Current + 1, false, health.transform.position, Vector2.zero, 0f, null));
                 }

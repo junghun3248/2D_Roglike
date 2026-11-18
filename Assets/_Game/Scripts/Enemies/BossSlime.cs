@@ -7,7 +7,7 @@ namespace Roglike.Enemies
 {
     [DefaultExecutionOrder(100)]
     [RequireComponent(typeof(Rigidbody2D), typeof(Health))]
-    public class BossSlime : MonoBehaviour
+    public class BossSlime : MonoBehaviour, IBoss
     {
         [SerializeField] private Transform _visual;
         [SerializeField] private string _displayName = "킹 슬라임";
@@ -78,6 +78,7 @@ namespace Roglike.Enemies
 
         public string DisplayName => _displayName;
         public event Action<BossSlime> Defeated;
+        public event Action<IBoss> BossDefeated;
         public bool IsEnraged { get; private set; }
         private float SpeedMultiplier => IsEnraged ? _enrageSpeedMultiplier : 1f;
 
@@ -329,6 +330,7 @@ namespace Roglike.Enemies
             TimeController.Instance?.PulseSlow(_deathSlowScale, _deathSlowDuration);
             Destroy(gameObject, _deathDuration);
             Defeated?.Invoke(this);
+            BossDefeated?.Invoke(this);
         }
 
         private void SetColor(Color color)

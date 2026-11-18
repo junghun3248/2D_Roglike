@@ -39,7 +39,7 @@ namespace Roglike.Tests
             Assert.IsNotNull(_skills, "Rebuild Prototype with PrototypeSceneBuilder before running skill tests.");
             EnemySpawner spawner = Object.FindFirstObjectByType<EnemySpawner>();
             if (spawner != null) Object.Destroy(spawner.gameObject);
-            _slimes = Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None);
+            _slimes = CombatTestTargets.ReplaceSceneEnemies(2);
             Assert.GreaterOrEqual(_slimes.Length, 2);
             foreach (SlimeEnemy slime in _slimes)
             {

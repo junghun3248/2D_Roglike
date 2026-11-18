@@ -83,38 +83,58 @@ namespace Roglike.Tests
             var playerHealth = UnityEngine.Object.FindFirstObjectByType<Roglike.Progression.PlayerStats>().GetComponent<Roglike.Combat.Health>();
             playerHealth.SetInvulnerable(10000f);
             yield return new WaitForSecondsRealtime(2.5f);
-            yield return CaptureScreen(directory, "4_run_room1");
+            yield return CaptureScreen(directory, "4_run_entrance");
 
             var choice = UnityEngine.Object.FindFirstObjectByType<Roglike.UI.UpgradeChoiceUI>();
+            var rest = UnityEngine.Object.FindFirstObjectByType<Roglike.UI.RestChoiceUI>();
             var run = UnityEngine.Object.FindFirstObjectByType<Roglike.Run.RunManager>();
-            int picks = 0;
+            var captured = new System.Collections.Generic.HashSet<string>();
             float elapsed = 0f;
-            while (!run.IsBossRoom && elapsed < 150f)
+            while (!run.IsBossRoom && elapsed < 180f)
             {
-                if (choice.IsOpen)
+                if (choice.IsOpen || rest.IsOpen)
                 {
                     yield return new WaitForSecondsRealtime(0.6f);
-                    if (picks == 0)
+                    if (captured.Add(rest.IsOpen ? "rest" : "upgrade"))
                     {
-                        yield return CaptureScreen(directory, "5_upgrade_choice");
+                        yield return CaptureScreen(directory, rest.IsOpen ? "5b_rest" : "5_upgrade_choice");
                     }
 
                     InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Digit1));
                     yield return new WaitForSecondsRealtime(0.1f);
                     InputSystem.QueueStateEvent(keyboard, new KeyboardState());
                     yield return new WaitForSecondsRealtime(0.1f);
-                    picks++;
                     elapsed += 0.8f;
                     continue;
                 }
 
+                if (run.CurrentRoom.RightDoorOpen && run.RoomIndex + 1 < run.RoomCount)
+                {
+                    // 문이 열리면 다음 방 입구로 옮긴다 (테스트와 같은 방식).
+                    var body = playerHealth.GetComponent<Rigidbody2D>();
+                    Vector3 next = new Vector3(run.CurrentRoom.MaxX + 2.5f, 1.2f, 0f);
+                    body.position = next;
+                    body.linearVelocity = Vector2.zero;
+                    playerHealth.transform.position = next;
+                    Physics2D.SyncTransforms();
+                    yield return new WaitForSecondsRealtime(2.2f);
+                    string roomShot = run.CurrentRoomType.ToString();
+                    if (captured.Add(roomShot))
+                    {
+                        yield return CaptureScreen(directory, "4_room_" + roomShot);
+                    }
+
+                    elapsed += 2.2f;
+                    continue;
+                }
+
                 KillEnemies();
-                elapsed += 0.2f;
-                yield return new WaitForSecondsRealtime(0.2f);
+                elapsed += 0.4f;
+                yield return new WaitForSecondsRealtime(0.4f);
             }
 
             yield return new WaitForSecondsRealtime(4f);
-            var boss = UnityEngine.Object.FindFirstObjectByType<BossSlime>();
+            var boss = (MonoBehaviour)UnityEngine.Object.FindObjectsByType<MonoBehaviour>(FindObjectsSortMode.None).First(b => b is IBoss);
             var bossHealth = boss.GetComponent<Roglike.Combat.Health>();
             bossHealth.TryApplyDamage(new Roglike.Combat.DamageInfo(bossHealth.Max * 0.55, true, boss.transform.position, Vector2.zero, 0f, null));
             yield return new WaitForSecondsRealtime(0.25f);
@@ -135,11 +155,49 @@ namespace Roglike.Tests
             Time.timeScale = 1f;
         }
 
+        /// <summary>1지역 적·보스를 주인공 옆에 세워 그림을 한 화면에 담는다.</summary>
+        [UnityTest]
+        public IEnumerator CaptureEnemyLineup()
+        {
+            string directory = Environment.GetEnvironmentVariable("ROGLIKE_SCREENSHOT_DIR");
+            if (string.IsNullOrEmpty(directory))
+            {
+                directory = Path.Combine(Application.temporaryCachePath, "Screenshots");
+            }
+
+            Directory.CreateDirectory(directory);
+            SceneManager.LoadScene("Prototype");
+            yield return new WaitForSecondsRealtime(0.5f);
+            UnityEngine.Object.Destroy(UnityEngine.Object.FindFirstObjectByType<EnemySpawner>().gameObject);
+            foreach (var health in UnityEngine.Object.FindObjectsByType<Roglike.Combat.Health>(FindObjectsSortMode.None))
+            {
+                if (health.Team == Roglike.Combat.Team.Enemy) UnityEngine.Object.Destroy(health.gameObject);
+            }
+
+            var player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
+            player.GetComponent<Roglike.Combat.Health>().SetInvulnerable(10000f);
+#if UNITY_EDITOR
+            string[] names = { "ClockworkBoar", "GearSquirrel", "StagKing" };
+            float[] offsets = { 3f, 5.5f, 9.5f };
+            for (int i = 0; i < names.Length; i++)
+            {
+                var prefab = UnityEditor.AssetDatabase.LoadAssetAtPath<GameObject>($"Assets/_Game/Prefabs/Enemies/{names[i]}.prefab");
+                var enemy = UnityEngine.Object.Instantiate(prefab, player.transform.position + new Vector3(offsets[i], 1f, 0f), Quaternion.identity);
+                foreach (var ai in enemy.GetComponents<MonoBehaviour>())
+                {
+                    if (ai is IEnemyAnimationState) ai.enabled = false; // 그림만 보려고 AI를 멈춘다.
+                }
+            }
+#endif
+            yield return new WaitForSecondsRealtime(1f);
+            yield return CaptureScreen(directory, "9_enemy_lineup");
+        }
+
         private static void KillEnemies()
         {
             foreach (var health in UnityEngine.Object.FindObjectsByType<Roglike.Combat.Health>(FindObjectsSortMode.None))
             {
-                if (health.Team == Roglike.Combat.Team.Enemy && !health.IsDead && health.GetComponent<BossSlime>() == null)
+                if (health.Team == Roglike.Combat.Team.Enemy && !health.IsDead && health.GetComponent<IBoss>() == null)
                 {
                     health.TryApplyDamage(new Roglike.Combat.DamageInfo(health.Current * 0.999 + 1, true, health.transform.position, Vector2.zero, 0f, null));
                 }

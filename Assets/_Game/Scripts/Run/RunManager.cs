@@ -15,7 +15,6 @@ namespace Roglike.Run
 {
     /// <summary>
     /// 한 런의 흐름: 구역(웨이브 전투) → 클리어 → 강화 3택1 → 다음 구역 … → 보스 → 승리/패배 결과.
-    /// M2에서는 같은 전투장을 구역마다 재사용한다 (맵 생성은 M4에서).
     /// </summary>
     public class RunManager : MonoBehaviour
     {
@@ -27,19 +26,18 @@ namespace Roglike.Run
 
         [Header("Scene")]
         [SerializeField] private PlayerStats _player;
-        [SerializeField] private Transform _playerSpawn;
-        [SerializeField] private Transform _bossSpawn;
-        [SerializeField] private Transform[] _spawnPoints;
+        [SerializeField] private Room[] _rooms;
+        private Transform[] _spawnPoints;
 
         [Header("UI")]
         [SerializeField] private UpgradeChoiceUI _upgradeChoice;
         [SerializeField] private BossHealthBar _bossBar;
-        [SerializeField] private ScreenFader _fader;
+        [SerializeField] private RestChoiceUI _restChoice;
         [SerializeField] private RunResultScreen _result;
         [SerializeField] private SynergyPanelUI _synergyPanel;
         [SerializeField] private MetaShopUI _metaShop;
 
-        [Header("Timing (실시간 초)")]
+        [Header("Timing (게임 시간 / 클리어·결과는 실시간)")]
         [SerializeField] private float _roomIntroDelay = 0.6f;
         [SerializeField] private float _waveDelay = 0.8f;
         [SerializeField] private float _spawnStagger = 0.15f;
@@ -53,6 +51,9 @@ namespace Roglike.Run
         private UpgradePool _pool;
         private Coroutine _loop;
         private bool _bossDefeated;
+        private IBoss _activeBoss;
+        private bool _waitingForEntry;
+        private int _enteredRoom = -1;
         private bool _ended;
         private int _upgradesTaken;
         private int _rerollsLeft;
@@ -64,10 +65,15 @@ namespace Roglike.Run
         /// <summary>HUD 갱신용.</summary>
         public event Action Changed;
 
-        /// <summary>0부터. RoomCount - 1이 보스 구역.</summary>
+        /// <summary>현재 지역의 방 인덱스 (0부터).</summary>
         public int RoomIndex { get; private set; }
-        public int RoomCount => (_config != null && _config.rooms != null ? _config.rooms.Length : 0) + 1;
-        public bool IsBossRoom => RoomIndex >= RoomCount - 1;
+        public int AreaIndex => 0; // 다음 지역 콘텐츠가 준비되면 지역 전환을 연결한다.
+        private AreaConfig Area => _config.areas[AreaIndex];
+        public int RoomCount => _config != null && _config.areas != null && _config.areas.Length > 0
+            ? Area?.rooms?.Length ?? 0 : 0;
+        public RoomType CurrentRoomType => RoomCount > 0 ? Area.rooms[RoomIndex].type : RoomType.Entrance;
+        public bool IsBossRoom => CurrentRoomType == RoomType.Boss;
+        public Room CurrentRoom => _rooms[RoomIndex];
         public int Kills { get; private set; }
         public double HighestHit { get; private set; }
         public float ElapsedSeconds { get; private set; }
@@ -97,6 +103,9 @@ namespace Roglike.Run
         private void OnDisable()
         {
             Health.AnyDamaged -= OnAnyDamaged;
+            if (_rooms != null)
+                foreach (Room room in _rooms) if (room != null) room.Entered -= OnRoomEntered;
+            if (_activeBoss != null) _activeBoss.BossDefeated -= OnBossDefeated;
             if (_playerHealth != null)
             {
                 _playerHealth.Died -= OnPlayerDied;
@@ -105,7 +114,7 @@ namespace Roglike.Run
 
         private void Start()
         {
-            if (_config == null || _player == null)
+            if (_config == null || _player == null || RoomCount == 0 || _rooms == null || _rooms.Length != RoomCount)
             {
                 Debug.LogError("[Roglike] RunManager: RunConfig 또는 Player가 연결되지 않았습니다.", this);
                 return;
@@ -118,6 +127,7 @@ namespace Roglike.Run
             _synergyPanel?.Bind(_synergy);
             _upgradeChoice?.SetTagStyle(TagStyle);
 
+            foreach (Room room in _rooms) room.Entered += OnRoomEntered;
             _loop = StartCoroutine(RunLoop());
         }
 
@@ -136,60 +146,93 @@ namespace Roglike.Run
             }
         }
 
-        private IEnumerator RunLoop()
+        private void OnRoomEntered(Room room)
         {
-            int normalRooms = RoomCount - 1;
-            for (RoomIndex = 0; RoomIndex < normalRooms; RoomIndex++)
-            {
-                yield return EnterRoom(_config.rooms[RoomIndex].name);
-                yield return FightRoom(_config.rooms[RoomIndex]);
-                yield return RoomCleared();
-                yield return ChooseUpgrade();
-            }
-
-            RoomIndex = normalRooms;
-            yield return EnterRoom("보스");
-            yield return FightBoss();
-            yield return new WaitForSecondsRealtime(1.2f);
-            EndRun(true);
+            if (!_waitingForEntry || _ended || _playerHealth.IsDead || !CurrentRoom.RightDoorOpen) return;
+            if (RoomIndex + 1 < RoomCount && room == _rooms[RoomIndex + 1])
+                _enteredRoom = RoomIndex + 1;
         }
 
-        private IEnumerator EnterRoom(string roomName)
+        private IEnumerator RunLoop()
         {
-            if (_fader != null)
+            for (RoomIndex = 0; RoomIndex < RoomCount; RoomIndex++)
             {
-                yield return _fader.FadeTo(1f, 0.3f);
+                RoomEntry entry = Area.rooms[RoomIndex];
+                CurrentRoom.LockBehind();
+                // 지나온 방의 "→" 표시가 뒤쪽 문 위에 남아 헷갈리지 않게 끈다.
+                if (RoomIndex > 0) _rooms[RoomIndex - 1].HideExitSign();
+                _spawnPoints = CurrentRoom.SpawnPoints;
+                GameCamera.Instance?.SetBounds(CurrentRoom.MinX, CurrentRoom.MaxX);
+                if (entry.type == RoomType.Entrance) CurrentRoom.SetRightOpen(true);
+                Banner = entry.type == RoomType.Entrance ? $"{AreaIndex + 1}지역 · {Area.displayName}"
+                    : entry.type == RoomType.Elite ? "엘리트!"
+                    : entry.type == RoomType.Rest ? "휴식"
+                    : entry.type == RoomType.Boss ? "보스" : entry.name;
+                Changed?.Invoke();
+                yield return new WaitForSeconds(_roomIntroDelay);
+                Banner = null;
+                Changed?.Invoke();
+
+                switch (entry.type)
+                {
+                    case RoomType.Combat:
+                    case RoomType.Elite:
+                        yield return FightRoom(entry);
+                        yield return RoomCleared();
+                        CurrentRoom.SetRightOpen(true);
+                        yield return ChooseUpgrade(entry.type == RoomType.Elite ? UpgradeRarity.Rare : UpgradeRarity.Common);
+                        break;
+                    case RoomType.Rest:
+                        yield return Rest();
+                        break;
+                    case RoomType.Boss:
+                        yield return FightBoss();
+                        yield return new WaitForSecondsRealtime(_clearCelebrateTime);
+                        EndRun(true);
+                        yield break;
+                }
+
+                CurrentRoom.SetRightOpen(true);
+                Changed?.Invoke();
+                if (RoomIndex + 1 >= RoomCount) break;
+                _waitingForEntry = true;
+                while (_enteredRoom != RoomIndex + 1) yield return null;
+                _waitingForEntry = false;
             }
+        }
 
-            ResetPlayerPosition();
-            Banner = IsBossRoom ? "BOSS" : $"{RoomIndex + 1}구역 · {roomName}";
-            Changed?.Invoke();
-
-            if (_fader != null)
-            {
-                yield return _fader.FadeTo(0f, 0.35f);
-            }
-
-            yield return new WaitForSecondsRealtime(_roomIntroDelay);
-            Banner = null;
-            Changed?.Invoke();
+        private IEnumerator Rest()
+        {
+            bool? heal = null;
+            SetGameplayPaused(true);
+            _restChoice.Show(_config.healOnRest, value => heal = value);
+            while (!heal.HasValue) yield return null;
+            if (heal.Value) _playerHealth.Heal(_playerHealth.Max * _config.healOnRest);
+            SetGameplayPaused(false);
+            if (!heal.Value) yield return ChooseUpgrade(UpgradeRarity.Rare);
         }
 
         private IEnumerator FightRoom(RoomEntry room)
         {
             float healthScale = Mathf.Pow(_config.enemyHealthGrowth, RoomIndex);
+            if (room.waves == null) yield break;
             for (int waveIndex = 0; waveIndex < room.waves.Length; waveIndex++)
             {
                 WaveEntry wave = room.waves[waveIndex];
-                if (wave?.enemyPrefab == null)
+                if (wave == null)
                 {
                     continue;
                 }
 
                 for (int i = 0; i < wave.count; i++)
                 {
-                    Spawn(wave.enemyPrefab, PickSpawnPoint(), healthScale);
-                    yield return new WaitForSecondsRealtime(_spawnStagger);
+                    GameObject prefab = wave.enemyPrefab;
+                    if (prefab == null && Area.enemyPool != null && Area.enemyPool.Length > 0)
+                        prefab = Area.enemyPool[UnityEngine.Random.Range(0, Area.enemyPool.Length)];
+                    if (prefab == null) continue;
+                    Health enemy = Spawn(prefab, PickSpawnPoint(), healthScale);
+                    if (room.type == RoomType.Elite && enemy != null) EliteModifier.Apply(enemy.gameObject);
+                    yield return new WaitForSeconds(_spawnStagger);
                 }
 
                 while (_alive.Count > 0)
@@ -197,7 +240,7 @@ namespace Roglike.Run
                     yield return null;
                 }
 
-                yield return new WaitForSecondsRealtime(_waveDelay);
+                yield return new WaitForSeconds(_waveDelay);
 
                 // 마지막 웨이브 뒤에는 구역 클리어 보상으로 고르므로 여기선 건너뛴다.
                 bool lastWave = waveIndex == room.waves.Length - 1;
@@ -222,9 +265,9 @@ namespace Roglike.Run
             Changed?.Invoke();
         }
 
-        private IEnumerator ChooseUpgrade()
+        private IEnumerator ChooseUpgrade(UpgradeRarity minRarity = UpgradeRarity.Common)
         {
-            List<UpgradeData> options = _pool.Roll(_config.upgradeChoices);
+            List<UpgradeData> options = _pool.Roll(_config.upgradeChoices, minRarity);
             if (options.Count == 0 || _upgradeChoice == null)
             {
                 yield break;
@@ -233,7 +276,7 @@ namespace Roglike.Run
             UpgradeData chosen = null;
             SetGameplayPaused(true);
             _upgradeChoice.Show(options, _pool.Stacks, upgrade => chosen = upgrade,
-                () => _pool.Roll(_config.upgradeChoices), _rerollsLeft);
+                () => _pool.Roll(_config.upgradeChoices, minRarity), _rerollsLeft);
             while (chosen == null)
             {
                 yield return null;
@@ -255,29 +298,31 @@ namespace Roglike.Run
 
         private IEnumerator FightBoss()
         {
-            if (_config.bossPrefab == null)
+            if (Area.boss == null)
             {
-                yield break;
+                Debug.LogError("[Roglike] 지역 보스 프리팹이 없습니다.", this);
+                while (true) yield return null;
             }
 
-            float healthScale = Mathf.Pow(_config.enemyHealthGrowth, RoomIndex) * _config.bossHealthMultiplier;
-            Vector3 position = _bossSpawn != null ? _bossSpawn.position : PickSpawnPoint();
-            Health bossHealth = Spawn(_config.bossPrefab, position, healthScale);
-            var boss = bossHealth.GetComponent<BossSlime>();
+            float scale = Mathf.Pow(_config.enemyHealthGrowth, RoomIndex) * _config.bossHealthMultiplier;
+            Vector3 position = _spawnPoints.Length > 0 ? _spawnPoints[_spawnPoints.Length - 1].position : CurrentRoom.PlayerEntry.position;
+            Health health = Spawn(Area.boss, position, scale);
+            _activeBoss = health != null ? health.GetComponent<IBoss>() : null;
+            if (_activeBoss == null)
+            {
+                Debug.LogError("[Roglike] 보스에 Health/IBoss가 필요합니다.", this);
+                while (true) yield return null;
+            }
             _bossDefeated = false;
-            if (boss != null)
-            {
-                boss.Defeated += _ => _bossDefeated = true;
-                _bossBar?.Show(bossHealth, boss.DisplayName);
-            }
-
-            while (!_bossDefeated && !bossHealth.IsDead)
-            {
-                yield return null;
-            }
-
+            _activeBoss.BossDefeated += OnBossDefeated;
+            _bossBar?.Show(health, _activeBoss.DisplayName);
+            while (!_bossDefeated) yield return null;
+            _activeBoss.BossDefeated -= OnBossDefeated;
+            _activeBoss = null;
             KillRemainingEnemies();
         }
+
+        private void OnBossDefeated(IBoss boss) => _bossDefeated = true;
 
         private Health Spawn(GameObject prefab, Vector3 position, float healthScale)
         {
@@ -285,6 +330,8 @@ namespace Roglike.Run
             var health = instance.GetComponent<Health>();
             if (health == null)
             {
+                Debug.LogError("[Roglike] 적 프리팹에 Health가 없습니다.", prefab);
+                Destroy(instance);
                 return null;
             }
 
@@ -345,12 +392,12 @@ namespace Roglike.Run
 
         private void KillRemainingEnemies()
         {
-            foreach (SlimeEnemy enemy in FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None))
+            foreach (Health health in FindObjectsByType<Health>(FindObjectsSortMode.None))
             {
-                var health = enemy.GetComponent<Health>();
-                if (health != null && !health.IsDead)
+                if (health.Team == Team.Enemy && !health.IsDead)
                 {
-                    health.TryApplyDamage(new DamageInfo(health.Current + 1, false, enemy.transform.position, Vector2.zero, 0f, gameObject));
+                    health.ClearInvulnerable();
+                    health.TryApplyDamage(new DamageInfo(health.Current + 1, false, health.transform.position, Vector2.zero, 0f, gameObject));
                 }
             }
         }
@@ -367,6 +414,8 @@ namespace Roglike.Run
                 StopCoroutine(_loop);
             }
 
+            _upgradeChoice?.Hide();
+            _restChoice?.Hide();
             StartCoroutine(ShowDefeat());
         }
 
@@ -423,23 +472,6 @@ namespace Roglike.Run
             {
                 _playerInput.enabled = !paused;
             }
-        }
-
-        private void ResetPlayerPosition()
-        {
-            if (_playerSpawn == null || _player == null)
-            {
-                return;
-            }
-
-            var body = _player.GetComponent<Rigidbody2D>();
-            if (body != null)
-            {
-                body.position = _playerSpawn.position;
-                body.linearVelocity = Vector2.zero;
-            }
-
-            _player.transform.position = _playerSpawn.position;
         }
 
         private Vector3 PickSpawnPoint()

@@ -56,14 +56,35 @@ namespace Roglike.Tests
             Assert.IsNotNull(player, "Player가 없습니다");
             Assert.IsTrue(player.IsGrounded, "Player가 땅에 서 있지 않습니다");
             Assert.That(player.transform.position.y, Is.InRange(0.5f, 1.2f));
-            Assert.AreEqual(6, Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).Length, "슬라임 수");
+            Assert.AreEqual(6, SceneEnemies().Length, "적 수");
             yield return null;
         }
 
         [UnityTest]
         public IEnumerator Run_Jump_Dash_MoveThePlayer()
         {
+            // 돌진하는 멧돼지·날아오는 톱니에 밀리면 이동 거리 판정이 흔들리므로 적과 투사체를 치우고,
+            // 시작 전에 맞았을 수 있으니 경직이 풀릴 때까지 기다린다.
+            Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
+            foreach (Health enemy in SceneEnemies())
+            {
+                Object.Destroy(enemy.gameObject);
+            }
+
+            foreach (GearProjectile gear in Object.FindObjectsByType<GearProjectile>(FindObjectsSortMode.None))
+            {
+                Object.Destroy(gear.gameObject);
+            }
+
             var player = Object.FindFirstObjectByType<PlayerController>();
+            float settle = 0f;
+            while ((player.IsHurt || !player.IsGrounded) && settle < 2f)
+            {
+                settle += 0.05f;
+                yield return new WaitForSecondsRealtime(0.05f);
+            }
+
+            yield return new WaitForSecondsRealtime(0.1f);
             float startX = player.transform.position.x;
 
             Press(Key.RightArrow);
@@ -90,8 +111,7 @@ namespace Roglike.Tests
         public IEnumerator HoldingAttack_DamagesEnemyInFront_AndChargesOverdriveBack()
         {
             var player = Object.FindFirstObjectByType<PlayerController>();
-            SlimeEnemy slime = PlaceSlimeInFrontOfPlayer(player);
-            var health = slime.GetComponent<Health>();
+            Health health = PlaceEnemyInFrontOfPlayer(player);
             double startHealth = health.Current;
 
             int damageEvents = 0;
@@ -118,7 +138,7 @@ namespace Roglike.Tests
         {
             // 적 접촉 피격(히트스톱)이 시간 판정을 흔들지 않도록 적을 치운다.
             Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
-            foreach (SlimeEnemy enemy in Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None))
+            foreach (Health enemy in SceneEnemies())
             {
                 Object.Destroy(enemy.gameObject);
             }
@@ -160,17 +180,26 @@ namespace Roglike.Tests
         [UnityTest]
         public IEnumerator KilledEnemy_IsRespawned()
         {
-            var slime = Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).First();
-            var health = slime.GetComponent<Health>();
-            health.TryApplyDamage(new DamageInfo(1e9, true, slime.transform.position, Vector2.zero, 0f, null));
+            Health health = SceneEnemies().First();
+            health.TryApplyDamage(new DamageInfo(1e9, true, health.transform.position, Vector2.zero, 0f, null));
             Assert.IsTrue(health.IsDead);
 
-            yield return new WaitForSecondsRealtime(0.5f);
-            Assert.IsTrue(slime == null, "죽은 적이 사라지지 않았습니다");
-            Assert.AreEqual(5, Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).Length);
+            yield return new WaitForSecondsRealtime(1f);
+            Assert.IsTrue(health == null, "죽은 적이 사라지지 않았습니다");
+            Assert.AreEqual(5, SceneEnemies().Length);
 
             yield return new WaitForSecondsRealtime(2f);
-            Assert.AreEqual(6, Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).Length, "적이 다시 생성되지 않았습니다");
+            Assert.AreEqual(6, SceneEnemies().Length, "적이 다시 생성되지 않았습니다");
+        }
+
+        [UnityTest]
+        public IEnumerator DestroyedEnemy_IsRespawnedOnce()
+        {
+            Object.Destroy(SceneEnemies().First().gameObject);
+            yield return new WaitForSecondsRealtime(1f);
+            Assert.AreEqual(5, SceneEnemies().Length);
+            yield return new WaitForSecondsRealtime(2f);
+            Assert.AreEqual(6, SceneEnemies().Length);
         }
 
         [Test]
@@ -184,16 +213,22 @@ namespace Roglike.Tests
             Assert.AreEqual("1.5조", NumberFormat.ToKorean(1.5e12));
         }
 
-        private static SlimeEnemy PlaceSlimeInFrontOfPlayer(PlayerController player)
+        private static Health PlaceEnemyInFrontOfPlayer(PlayerController player)
         {
-            SlimeEnemy slime = Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).First();
-            var body = slime.GetComponent<Rigidbody2D>();
+            Health enemy = SceneEnemies().First(h => !h.IsDead && h.GetComponent<Rigidbody2D>() != null);
+            foreach (MonoBehaviour behaviour in enemy.GetComponents<MonoBehaviour>())
+                if (behaviour is BoarEnemy || behaviour is SquirrelEnemy || behaviour is SlimeEnemy) behaviour.enabled = false;
+            var body = enemy.GetComponent<Rigidbody2D>();
             Vector2 position = (Vector2)player.transform.position + new Vector2(player.Facing * 1.2f, -0.35f);
             body.position = position;
-            slime.transform.position = position;
+            enemy.transform.position = position;
             body.linearVelocity = Vector2.zero;
-            return slime;
+            Physics2D.SyncTransforms();
+            return enemy;
         }
+
+        private static Health[] SceneEnemies() => Object.FindObjectsByType<Health>(FindObjectsSortMode.None)
+            .Where(health => health.Team == Team.Enemy).ToArray();
 
         private void Press(Key key)
         {
