@@ -56,3 +56,6 @@ Thumbs.db
 
 # Unity Test Runner 임시 씬 (중단된 테스트가 남김)
 /[Aa]ssets/InitTestScene*.unity*
+
+# Python 캐시 (Tools/art 스크립트)
+__pycache__/

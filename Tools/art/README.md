@@ -12,3 +12,15 @@ python -I Tools/art/process_gpt_pilot.py
   Unity 메뉴 **Roglike > Build Prototype Scene / Build Run Scene**으로 씬을 다시 만든다.
 - Unity 가져오기 설정(PPU 48, Point 필터, 발밑 피벗)은 `Assets/_Game/Scripts/Editor/GeneratedArtImporter.cs`가 자동으로 건다.
 - 필요: Python 3.12 + Pillow + numpy.
+
+## 1지역 적·보스·소품
+
+```bash
+python -I Tools/art/process_gpt_area1.py
+```
+
+- 입력: `_imports/gpt/area1/` (멧돼지·다람쥐·사슴왕 동작 그림, 소품 4종).
+- 출력: 동작별 폴더(`boar_idle`, `boar_telegraph`, `squirrel_throw`, `stag_rear` …)와 `gear_projectile`·`leaf_projectile`·`gate_closed`·`gate_open`.
+- 적은 프레임마다 발밑을 맞추지 않고 **공통 바닥선** 기준으로 둔다 (다람쥐 점프처럼 공중 동작이 공중에 남도록).
+- 크기: 멧돼지 몸통 폭 88px, 다람쥐 키 56px, 사슴왕 키 168px(약 3.5 단위), 문 키 192px(4 단위).
+- 게임 연결: `EnemyPrefabBuilder`가 프리팹에 상태별 그림(`EnemySpriteAnimations` + AI의 `AnimationState`)을 입힌다.

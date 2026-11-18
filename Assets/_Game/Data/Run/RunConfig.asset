@@ -12,37 +12,52 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 7406b9efc52682d4d8449393b76d567b, type: 3}
   m_Name: RunConfig
   m_EditorClassIdentifier: Roglike::Roglike.Data.RunConfig
-  rooms:
-  - name: "\uCD08\uC6D0"
-    waves:
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 3
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 4
-  - name: "\uC5B8\uB355"
-    waves:
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 4
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 5
-  - name: "\uC232 \uC785\uAD6C"
-    waves:
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 4
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 5
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 6
-  - name: "\uAE4A\uC740 \uC232"
-    waves:
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 5
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 6
-    - enemyPrefab: {fileID: 3948386658645616083, guid: 50b97bae1822c7c419a0bc1f3a8f654d, type: 3}
-      count: 7
-  bossPrefab: {fileID: 6622295527402659938, guid: 03b23ca775cb8e64c850ecb30bdc1e9d, type: 3}
+  areas:
+  - displayName: "\uBA48\uCD98 \uC232"
+    enemyPool:
+    - {fileID: 7019396431964265170, guid: 60cca232b2b373c4e9dc14808ee4a0b4, type: 3}
+    - {fileID: 690434648150288819, guid: d3c34ed659293044eac7e94f7300ac49, type: 3}
+    boss: {fileID: 8913167330441034234, guid: 92fedd6533845bb44ad5d12bd8681dc0, type: 3}
+    rooms:
+    - name: "\uC785\uAD6C"
+      type: 0
+      layout: 0
+      waves: []
+    - name: "\uC232\uAE38"
+      type: 1
+      layout: 1
+      waves:
+      - enemyPrefab: {fileID: 0}
+        count: 3
+      - enemyPrefab: {fileID: 0}
+        count: 4
+    - name: "\uBA48\uCD98 \uB098\uBB47\uAC00\uC9C0"
+      type: 1
+      layout: 2
+      waves:
+      - enemyPrefab: {fileID: 0}
+        count: 4
+      - enemyPrefab: {fileID: 0}
+        count: 5
+      - enemyPrefab: {fileID: 0}
+        count: 6
+    - name: "\uD734\uC2DD"
+      type: 2
+      layout: 3
+      waves: []
+    - name: "\uC5D8\uB9AC\uD2B8!"
+      type: 3
+      layout: 4
+      waves:
+      - enemyPrefab: {fileID: 0}
+        count: 2
+    - name: "\uD0DC\uC5FD \uC0AC\uC2B4\uC655"
+      type: 4
+      layout: 5
+      waves: []
   enemyHealthGrowth: 1.8
   bossHealthMultiplier: 1
   healOnRoomClear: 0.25
   upgradeChoices: 3
+  healOnRest: 0.4
+  upgradeAfterEveryWave: 1
