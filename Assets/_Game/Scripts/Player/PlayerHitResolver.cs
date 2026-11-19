@@ -54,6 +54,7 @@ namespace Roglike.Player
                 * (1f + Random.Range(-_damageVariance, _damageVariance))
                 * (isCritical ? critMultiplier : 1f)
                 * (_overdrive != null ? _overdrive.DamageMultiplier : 1f);
+            if (target.TryGetComponent<StatusEffects>(out var status)) damage *= status.DamageTakenMultiplier;
             Vector2 point = (Vector2)hitCollider.bounds.center + Random.insideUnitCircle * _hitPointScatter;
             var info = new DamageInfo(damage, isCritical, point, spec.Knockback, spec.HitStun, gameObject);
             if (!target.TryApplyDamage(info)) return false;

@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.Text;
 using Roglike.Data;
 using Roglike.Progression;
 using UnityEngine;
@@ -24,6 +23,7 @@ namespace Roglike.UI
         private readonly Text[] _tags = new Text[3];
         private readonly Text[] _descriptions = new Text[3];
         private readonly Text[] _stackTexts = new Text[3];
+        private readonly Outline[] _glows = new Outline[3];
         private readonly Color[] _colors = new Color[3];
         private GameObject _root;
         private InputActionMap _actions;
@@ -56,7 +56,7 @@ namespace Roglike.UI
             AddButton("Left", () => Move(-1), "<Keyboard>/leftArrow", "<Keyboard>/a", "<Gamepad>/dpad/left");
             AddButton("Right", () => Move(1), "<Keyboard>/rightArrow", "<Keyboard>/d", "<Gamepad>/dpad/right");
             AddButton("Confirm", () => Choose(_selected), "<Keyboard>/j", "<Keyboard>/space",
-                "<Keyboard>/enter", "<Keyboard>/numpadEnter", "<Gamepad>/buttonSouth");
+                "<Keyboard>/enter", "<Keyboard>/x", "<Keyboard>/numpadEnter", "<Gamepad>/buttonSouth");
             for (int i = 0; i < 3; i++)
             {
                 int index = i;
@@ -90,7 +90,7 @@ namespace Roglike.UI
         {
             _tagStyle = style;
             if (!IsOpen) return;
-            for (int i = 0; i < _options.Count; i++) _tags[i].text = DescribeTags(_options[i]);
+            for (int i = 0; i < _options.Count; i++) RefreshTags(i, _options[i]);
         }
 
         private void ReplaceOptions(IReadOnlyList<UpgradeData> options)
@@ -129,33 +129,43 @@ namespace Roglike.UI
                 _cards[i].anchoredPosition = new Vector2((i - (_options.Count - 1) * 0.5f) * 480f, 0f);
                 _cards[i].localScale = Vector3.zero;
                 _colors[i] = RarityColor(upgrade.rarity);
+                _glows[i].effectColor = new Color(_colors[i].r, _colors[i].g, _colors[i].b, 0.22f);
                 _rarities[i].color = _colors[i];
                 _rarities[i].text = RarityName(upgrade.rarity);
                 _names[i].text = upgrade.displayName;
-                _tags[i].text = DescribeTags(upgrade);
+                RefreshTags(i, upgrade);
                 _descriptions[i].text = string.IsNullOrWhiteSpace(upgrade.description)
                     ? UpgradeText.Describe(upgrade.modifiers) : upgrade.description;
                 _stackTexts[i].text = $"(현재 {_stacks?.Invoke(upgrade) ?? 0} / 최대 {upgrade.maxStacks})";
             }
 
-            _hint.text = "← → 선택 · J / Space / Enter 결정 · 1 2 3 바로 선택";
+            _hint.text = "← → 선택 · X / J / Space / Enter 결정 · 1 2 3 바로 선택";
             if (_reroll != null && RerollsLeft > 0)
                 _hint.text += $"\nR 다시 뽑기 (남은 {RerollsLeft}회) · 패드 Y / △";
             RefreshFrames();
         }
 
-        private string DescribeTags(UpgradeData upgrade)
+        private void RefreshTags(int index, UpgradeData upgrade)
         {
-            if (upgrade.tags == null) return string.Empty;
-            var text = new StringBuilder();
-            foreach (UpgradeTag tag in upgrade.tags)
+            Transform root = _tags[index].transform;
+            foreach (Transform child in root)
             {
-                if (text.Length > 0) text.Append(" · ");
-                (string name, Color color) style = _tagStyle != null ? _tagStyle(tag) : (tag.ToString(), Color.white);
-                text.Append("<color=#").Append(ColorUtility.ToHtmlStringRGBA(style.color)).Append('>')
-                    .Append(style.name).Append("</color>");
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
             }
-            return text.ToString();
+            if (upgrade.tags == null || upgrade.tags.Length == 0) return;
+            float width = Mathf.Min(110f, 350f / upgrade.tags.Length);
+            for (int i = 0; i < upgrade.tags.Length; i++)
+            {
+                UpgradeTag tag = upgrade.tags[i];
+                (string name, Color color) style = _tagStyle != null ? _tagStyle(tag) : (tag.ToString(), Color.white);
+                var chip = UiFactory.CreatePanel(root, new Vector2(width - 6f, 30f), "TagChip", style.color);
+                chip.anchoredPosition = new Vector2((i - (upgrade.tags.Length - 1) * 0.5f) * width, 0f);
+                var label = UiFactory.Label("Tag", chip, style.name, 18, Vector2.zero, new Vector2(width - 10f, 26f), style.color);
+                label.resizeTextForBestFit = true;
+                label.resizeTextMinSize = 12;
+                label.resizeTextMaxSize = 18;
+            }
         }
 
         private void Update()
@@ -172,15 +182,13 @@ namespace Roglike.UI
 
         private void BuildCard(int index, Transform parent)
         {
-            RectTransform card = UiFactory.CreateRect($"Card{index + 1}", parent,
-                Vector2.one * 0.5f, Vector2.one * 0.5f, Vector2.zero, new Vector2(420f, 520f));
+            RectTransform card = UiFactory.CreatePanel(parent, new Vector2(420f, 520f), $"Card{index + 1}");
             _cards[index] = card;
-            _frames[index] = UiFactory.CreateImage("Frame", card, Color.white);
-            UiFactory.Stretch(_frames[index].rectTransform);
-            Image body = UiFactory.CreateImage("Body", card, new Color(0.08f, 0.1f, 0.16f, 1f));
-            UiFactory.Stretch(body.rectTransform);
-            body.rectTransform.offsetMin = Vector2.one * 5f;
-            body.rectTransform.offsetMax = Vector2.one * -5f;
+            _frames[index] = card.GetComponent<Image>();
+            var glow = card.gameObject.AddComponent<Outline>();
+            _glows[index] = glow;
+            glow.effectDistance = new Vector2(4f, -4f);
+            glow.effectColor = new Color(1f, 0.8f, 0.3f, 0.2f);
             _rarities[index] = CreateLabel("Rarity", card, "", 26, Color.white,
                 new Vector2(0f, 207f), new Vector2(360f, 42f));
             _names[index] = CreateLabel("Name", card, "", 38, Color.white,
@@ -192,8 +200,10 @@ namespace Roglike.UI
                 new Vector2(0f, -40f), new Vector2(364f, 160f));
             _stackTexts[index] = CreateLabel("Stacks", card, "", 24, new Color(0.8f, 0.83f, 0.9f),
                 new Vector2(0f, -160f), new Vector2(364f, 42f));
-            CreateLabel("Key", card, $"[{index + 1}]", 30, Color.white,
-                new Vector2(0f, -218f), new Vector2(364f, 42f));
+            var badge = UiFactory.CreatePanel(card, new Vector2(60f, 42f), "KeyBadge");
+            badge.anchoredPosition = new Vector2(0f, -218f);
+            CreateLabel("Key", badge, $"[{index + 1}]", 30, Color.white,
+                Vector2.zero, new Vector2(56f, 38f));
         }
 
         private static Text CreateLabel(string name, Transform parent, string value, int size,
@@ -263,15 +273,7 @@ namespace Roglike.UI
             if (_root != null) Destroy(_root);
         }
 
-        private static Color RarityColor(UpgradeRarity rarity)
-        {
-            switch (rarity)
-            {
-                case UpgradeRarity.Rare: return new Color(0.35f, 0.75f, 1f);
-                case UpgradeRarity.Epic: return new Color(1f, 0.78f, 0.22f);
-                default: return new Color(0.82f, 0.85f, 0.9f);
-            }
-        }
+        private static Color RarityColor(UpgradeRarity rarity) => UiTheme.Rarity(rarity);
 
         private static string RarityName(UpgradeRarity rarity)
         {

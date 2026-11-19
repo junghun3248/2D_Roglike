@@ -40,6 +40,7 @@ namespace Roglike.Run
         [Header("Timing (게임 시간 / 클리어·결과는 실시간)")]
         [SerializeField] private float _roomIntroDelay = 0.6f;
         [SerializeField] private float _waveDelay = 0.8f;
+        [SerializeField, Min(1)] private int _maxAlivePerRoom = 4;
         [SerializeField] private float _spawnStagger = 0.15f;
         [SerializeField] private float _clearCelebrateTime = 0.8f;
         [SerializeField] private float _deathResultDelay = 1.2f;
@@ -68,7 +69,8 @@ namespace Roglike.Run
         /// <summary>현재 지역의 방 인덱스 (0부터).</summary>
         public int RoomIndex { get; private set; }
         public int AreaIndex => 0; // 다음 지역 콘텐츠가 준비되면 지역 전환을 연결한다.
-        private AreaConfig Area => _config.areas[AreaIndex];
+        public AreaConfig Area => _config != null && _config.areas != null && AreaIndex < _config.areas.Length
+            ? _config.areas[AreaIndex] : null;
         public int RoomCount => _config != null && _config.areas != null && _config.areas.Length > 0
             ? Area?.rooms?.Length ?? 0 : 0;
         public RoomType CurrentRoomType => RoomCount > 0 ? Area.rooms[RoomIndex].type : RoomType.Entrance;
@@ -226,12 +228,13 @@ namespace Roglike.Run
 
                 for (int i = 0; i < wave.count; i++)
                 {
+                    while (_alive.Count >= _maxAlivePerRoom) yield return null;
                     GameObject prefab = wave.enemyPrefab;
                     if (prefab == null && Area.enemyPool != null && Area.enemyPool.Length > 0)
                         prefab = Area.enemyPool[UnityEngine.Random.Range(0, Area.enemyPool.Length)];
                     if (prefab == null) continue;
                     Health enemy = Spawn(prefab, PickSpawnPoint(), healthScale);
-                    if (room.type == RoomType.Elite && enemy != null) EliteModifier.Apply(enemy.gameObject);
+                    if (room.type == RoomType.Elite && i == 0 && waveIndex == 0 && enemy != null) EliteModifier.Apply(enemy.gameObject);
                     yield return new WaitForSeconds(_spawnStagger);
                 }
 

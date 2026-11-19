@@ -13,17 +13,7 @@ namespace Roglike.EditorTools
         public static void Configure(PlayerCombat combat)
         {
             var serialized = new SerializedObject(combat);
-            SetArray(serialized, "_airCombo", new[]
-            {
-                Ensure("Air1", 0.8f, a => Air(a, new Vector2(1f, 1f))),
-                Ensure("Air2", 0.9f, a => Air(a, new Vector2(1.5f, 1f))),
-                Ensure("Air3", 1.3f, a => { Air(a, new Vector2(9f, -10f)); a.isFinisher = true; }),
-            });
-            SetArray(serialized, "_heavyCombo", new[]
-            {
-                Ensure("Heavy1", 1.8f, a => Heavy(a, false)),
-                Ensure("Heavy2", 2.4f, a => Heavy(a, true)),
-            });
+            serialized.FindProperty("_heavy").objectReferenceValue = Ensure("Heavy1", 1.8f, a => Heavy(a, false));
             serialized.FindProperty("_dashAttack").objectReferenceValue = Ensure("DashAttack", 1.6f, a =>
             {
                 a.startup = 0.025f; a.active = 0.18f; a.recovery = 0.08f;
@@ -58,13 +48,6 @@ namespace Roglike.EditorTools
             serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
-        private static void Air(AttackData attack, Vector2 knockback)
-        {
-            attack.startup = 0.025f; attack.active = 0.07f; attack.recovery = 0.12f; attack.cancelTime = 0.1f;
-            attack.lungeSpeed = 2f; attack.knockback = knockback; attack.hitStun = 0.3f;
-            attack.hitboxSize = new Vector2(2f, 1.8f); attack.hitStop = 0.035f; attack.shake = 0.12f;
-        }
-
         private static void Heavy(AttackData attack, bool finisher)
         {
             attack.startup = 0.15f; attack.active = 0.09f; attack.recovery = 0.12f; attack.cancelTime = 0.24f;
@@ -95,13 +78,6 @@ namespace Roglike.EditorTools
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
             return AssetDatabase.LoadAssetAtPath<AttackData>(path);
-        }
-
-        private static void SetArray(SerializedObject serialized, string field, AttackData[] attacks)
-        {
-            SerializedProperty property = serialized.FindProperty(field);
-            property.arraySize = attacks.Length;
-            for (int i = 0; i < attacks.Length; i++) property.GetArrayElementAtIndex(i).objectReferenceValue = attacks[i];
         }
     }
 }

@@ -56,35 +56,15 @@ namespace Roglike.Tests
             Assert.IsNotNull(player, "Player가 없습니다");
             Assert.IsTrue(player.IsGrounded, "Player가 땅에 서 있지 않습니다");
             Assert.That(player.transform.position.y, Is.InRange(0.5f, 1.2f));
-            Assert.AreEqual(6, SceneEnemies().Length, "적 수");
+            Assert.AreEqual(MaxAlive, SceneEnemies().Length, "적 수 (연습장 동시 최대)");
             yield return null;
         }
 
         [UnityTest]
         public IEnumerator Run_Jump_Dash_MoveThePlayer()
         {
-            // 돌진하는 멧돼지·날아오는 톱니에 밀리면 이동 거리 판정이 흔들리므로 적과 투사체를 치우고,
-            // 시작 전에 맞았을 수 있으니 경직이 풀릴 때까지 기다린다.
-            Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
-            foreach (Health enemy in SceneEnemies())
-            {
-                Object.Destroy(enemy.gameObject);
-            }
-
-            foreach (GearProjectile gear in Object.FindObjectsByType<GearProjectile>(FindObjectsSortMode.None))
-            {
-                Object.Destroy(gear.gameObject);
-            }
-
             var player = Object.FindFirstObjectByType<PlayerController>();
-            float settle = 0f;
-            while ((player.IsHurt || !player.IsGrounded) && settle < 2f)
-            {
-                settle += 0.05f;
-                yield return new WaitForSecondsRealtime(0.05f);
-            }
-
-            yield return new WaitForSecondsRealtime(0.1f);
+            yield return ClearEnemiesAndSettle(player);
             float startX = player.transform.position.x;
 
             Press(Key.RightArrow);
@@ -93,7 +73,7 @@ namespace Roglike.Tests
             Assert.Greater(player.transform.position.x, startX + 1.5f, "오른쪽으로 달리지 않았습니다");
 
             float groundY = player.transform.position.y;
-            Press(Key.Space);
+            Press(Key.Z);
             yield return new WaitForSecondsRealtime(0.2f);
             Assert.Greater(player.transform.position.y, groundY + 1f, "점프하지 않았습니다");
             Release();
@@ -101,7 +81,7 @@ namespace Roglike.Tests
             Assert.IsTrue(player.IsGrounded, "점프 후 착지하지 않았습니다");
 
             float dashStartX = player.transform.position.x;
-            Press(Key.LeftShift);
+            Press(Key.C);
             yield return new WaitForSecondsRealtime(0.25f);
             Release();
             Assert.Greater(player.transform.position.x, dashStartX + 2.5f, "대시 거리가 부족합니다");
@@ -124,31 +104,25 @@ namespace Roglike.Tests
             }
 
             Health.AnyDamaged += Count;
-            Press(Key.A);
+            Press(Key.X);
             yield return new WaitForSecondsRealtime(0.9f);
             Release();
             Health.AnyDamaged -= Count;
 
-            Assert.GreaterOrEqual(damageEvents, 2, "공격 키를 누르고 있어도 콤보가 이어지지 않았습니다");
+            Assert.GreaterOrEqual(damageEvents, 2, "X를 누르고 있어도 단일 베기가 반복되지 않았습니다");
             Assert.IsTrue(health == null || health.Current < startHealth, "적이 피해를 입지 않았습니다");
         }
 
         [UnityTest]
         public IEnumerator Overdrive_SlowsWorld_PlayerKeepsNormalSpeed()
         {
-            // 적 접촉 피격(히트스톱)이 시간 판정을 흔들지 않도록 적을 치운다.
-            Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
-            foreach (Health enemy in SceneEnemies())
-            {
-                Object.Destroy(enemy.gameObject);
-            }
-
-            yield return null;
+            // 적 접촉 피격(히트스톱·경직)이 시간·이동 판정을 흔들지 않도록 적을 치우고 경직이 풀릴 때까지 기다린다.
+            yield return ClearEnemiesAndSettle(Object.FindFirstObjectByType<PlayerController>());
 
             var overdrive = Object.FindFirstObjectByType<OverdriveController>();
             Assert.IsTrue(overdrive.IsReady, "M1 설정상 오버드라이브 게이지가 가득 차 있어야 합니다");
 
-            Press(Key.F);
+            Press(Key.Space);
             yield return new WaitForSecondsRealtime(0.3f);
             Release();
 
@@ -171,6 +145,14 @@ namespace Roglike.Tests
         [UnityTest]
         public IEnumerator HitStop_FreezesThenRecovers()
         {
+            // 돌진하는 멧돼지에게 맞으면 새 히트스톱이 걸려 판정이 흔들리므로 적을 치운다.
+            Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
+            foreach (Health enemy in SceneEnemies())
+            {
+                Object.Destroy(enemy.gameObject);
+            }
+
+            yield return new WaitForSecondsRealtime(0.3f);
             TimeController.Instance.HitStop(0.1f);
             Assert.AreEqual(0f, Time.timeScale);
             yield return new WaitForSecondsRealtime(0.2f);
@@ -186,10 +168,10 @@ namespace Roglike.Tests
 
             yield return new WaitForSecondsRealtime(1f);
             Assert.IsTrue(health == null, "죽은 적이 사라지지 않았습니다");
-            Assert.AreEqual(5, SceneEnemies().Length);
+            Assert.AreEqual(MaxAlive - 1, SceneEnemies().Length);
 
             yield return new WaitForSecondsRealtime(2f);
-            Assert.AreEqual(6, SceneEnemies().Length, "적이 다시 생성되지 않았습니다");
+            Assert.AreEqual(MaxAlive, SceneEnemies().Length, "적이 다시 생성되지 않았습니다");
         }
 
         [UnityTest]
@@ -197,9 +179,9 @@ namespace Roglike.Tests
         {
             Object.Destroy(SceneEnemies().First().gameObject);
             yield return new WaitForSecondsRealtime(1f);
-            Assert.AreEqual(5, SceneEnemies().Length);
+            Assert.AreEqual(MaxAlive - 1, SceneEnemies().Length);
             yield return new WaitForSecondsRealtime(2f);
-            Assert.AreEqual(6, SceneEnemies().Length);
+            Assert.AreEqual(MaxAlive, SceneEnemies().Length);
         }
 
         [Test]
@@ -226,6 +208,34 @@ namespace Roglike.Tests
             Physics2D.SyncTransforms();
             return enemy;
         }
+
+        // 돌진하는 멧돼지·날아오는 톱니에 밀리면 판정이 흔들리므로 적과 투사체를 치우고,
+        // 시작 전에 맞았을 수 있으니 경직이 풀리고 착지할 때까지 기다린다.
+        private static IEnumerator ClearEnemiesAndSettle(PlayerController player)
+        {
+            Object.Destroy(Object.FindFirstObjectByType<EnemySpawner>().gameObject);
+            foreach (Health enemy in SceneEnemies())
+            {
+                Object.Destroy(enemy.gameObject);
+            }
+
+            foreach (GearProjectile gear in Object.FindObjectsByType<GearProjectile>(FindObjectsSortMode.None))
+            {
+                Object.Destroy(gear.gameObject);
+            }
+
+            float settle = 0f;
+            while ((player.IsHurt || !player.IsGrounded) && settle < 2f)
+            {
+                settle += 0.05f;
+                yield return new WaitForSecondsRealtime(0.05f);
+            }
+
+            yield return new WaitForSecondsRealtime(0.1f);
+        }
+
+        // 연습장 스포너의 동시 최대 적 수 (플레이 피드백 "몹이 너무 많다"로 6 → 3).
+        private const int MaxAlive = 3;
 
         private static Health[] SceneEnemies() => Object.FindObjectsByType<Health>(FindObjectsSortMode.None)
             .Where(health => health.Team == Team.Enemy).ToArray();

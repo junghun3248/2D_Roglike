@@ -1,4 +1,5 @@
 using UnityEngine;
+using Roglike.Core;
 using UnityEngine.Rendering;
 using UnityEngine.Rendering.Universal;
 
@@ -17,6 +18,7 @@ namespace Roglike.Player
         private Volume _volume;
         private VolumeProfile _profile;
         private float _targetWeight;
+        [SerializeField, Range(0f, 1f)] private float _focusWeight = 0.18f;
 
         private void Awake()
         {
@@ -33,7 +35,7 @@ namespace Roglike.Player
             var vignette = _profile.Add<Vignette>(true);
             vignette.intensity.Override(0.42f);
             vignette.smoothness.Override(0.5f);
-            vignette.color.Override(new Color(0.3f, 0.02f, 0.4f));
+            vignette.color.Override(new Color(0.05f, 0.45f, 0.55f));
 
             var lens = _profile.Add<LensDistortion>(true);
             lens.intensity.Override(-0.22f);
@@ -76,8 +78,9 @@ namespace Roglike.Player
 
         private void Update()
         {
-            float speed = _targetWeight > _volume.weight ? _fadeInSpeed : _fadeOutSpeed;
-            _volume.weight = Mathf.MoveTowards(_volume.weight, _targetWeight, speed * Time.unscaledDeltaTime);
+            float target = Mathf.Max(_targetWeight, TimeController.Instance != null && TimeController.Instance.IsFocusing ? _focusWeight : 0f);
+            float speed = target > _volume.weight ? _fadeInSpeed : _fadeOutSpeed;
+            _volume.weight = Mathf.MoveTowards(_volume.weight, target, speed * Time.unscaledDeltaTime);
         }
     }
 }

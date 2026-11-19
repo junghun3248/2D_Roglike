@@ -24,6 +24,9 @@ namespace Roglike.EditorTools
         // 배경은 960x540px(PPU 48 → 20x11.25)라 카메라(세로 13)를 덮도록 키운다.
         private const float BackgroundScale = 1.35f;
 
+        // 바닥 흙을 콜라이더 아래로 더 그리는 깊이 (카메라 세로 13칸을 넘기면 화면 아래가 항상 흙).
+        private const float GroundVisualDepth = 14f;
+
         private static bool _reimported;
 
         /// <summary>
@@ -211,16 +214,30 @@ namespace Roglike.EditorTools
             }
 
             // 플레이어 원점은 콜라이더(0.8x1.6) 가운데 → 발밑은 y -0.8.
+            Transform feel = body.transform.parent;
+            if (feel.GetComponent<PlayerVisualFeel>() == null)
+            {
+                feel = new GameObject("VisualFeel").transform;
+                feel.SetParent(body.transform.parent, false);
+            }
+            feel.localPosition = new Vector3(0f, -0.8f, 0f);
+            feel.localScale = Vector3.one;
+            feel.localRotation = Quaternion.identity;
+            body.transform.SetParent(feel, false);
             body.transform.localScale = Vector3.one;
-            body.transform.localPosition = new Vector3(0f, -0.8f, 0f);
+            body.transform.localPosition = Vector3.zero;
+            if (!feel.TryGetComponent(out PlayerVisualFeel visualFeel))
+                visualFeel = feel.gameObject.AddComponent<PlayerVisualFeel>();
             body.sprite = idle.frames[0];
             body.color = Color.white;
             body.sharedMaterial = FlashMaterial();
 
-            var animator = body.gameObject.AddComponent<SpriteAnimator>();
+            if (!body.TryGetComponent(out SpriteAnimator animator))
+                animator = body.gameObject.AddComponent<SpriteAnimator>();
             SetBool(animator, "_usePlayerTime", true);
 
-            var driver = player.AddComponent<PlayerAnimationDriver>();
+            if (!player.TryGetComponent(out PlayerAnimationDriver driver))
+                driver = player.AddComponent<PlayerAnimationDriver>();
             SetObject(driver, "_animator", animator);
             SetObject(driver, "_idle", idle);
             SetObject(driver, "_run", run);
@@ -358,7 +375,10 @@ namespace Roglike.EditorTools
 
             Sprite fill = Load("ground_fill");
             Sprite top = Load("ground_top");
-            Tiled(solid.transform, "Fill", fill, size, Vector2.zero, 0);
+            // 바닥(윗면이 있는 땅)은 흙 그림을 아래로 깊게 늘려 화면 아래까지 흙만 보이게 한다
+            // (플레이 피드백: "땅 밑으로 다른 게 안 보이게"). 콜라이더 크기·위치는 그대로.
+            float depth = hasTop ? GroundVisualDepth : 0f;
+            Tiled(solid.transform, "Fill", fill, new Vector2(size.x, size.y + depth), new Vector2(0f, -depth * 0.5f), 0);
             if (hasTop)
             {
                 float topHeight = top.bounds.size.y;

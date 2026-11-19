@@ -28,6 +28,15 @@ namespace Roglike.Combat
         private Color[] _tintColors;
         private float[] _tintAmounts;
         private Color _statusTint;
+        private bool _frozen;
+        private Color _freezeTint;
+
+        public void SetFreezeTint(bool frozen, Color color)
+        {
+            _frozen = frozen;
+            _freezeTint = color;
+            if (!_flashing) RestoreColors();
+        }
         private float _statusStrength;
 
         [Tooltip("그림 스프라이트에 SetBaseColor 색을 얹는 최대 세기 (0~1)")]
@@ -182,6 +191,12 @@ namespace Roglike.Combat
         private void ApplyTint(int index)
         {
             if (_renderers[index] == null) return;
+            if (_frozen)
+            {
+                if (UsesFlashShader(index)) SetOverlay(index, _freezeTint, _maxTint);
+                else _renderers[index].color = Color.Lerp(_baseColors[index], _freezeTint, 0.7f);
+                return;
+            }
             bool telegraph = _tintColors[index] != _originalColors[index];
             if (UsesFlashShader(index))
                 SetOverlay(index, telegraph ? _tintColors[index] : _statusTint,

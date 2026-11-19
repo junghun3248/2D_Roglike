@@ -76,7 +76,7 @@ namespace Roglike.Tests
         public IEnumerator Attack_PlaysAttackFrames()
         {
             var controller = Object.FindFirstObjectByType<PlayerController>();
-            InputSystem.QueueStateEvent(_keyboard, new KeyboardState(Key.A));
+            InputSystem.QueueStateEvent(_keyboard, new KeyboardState(Key.X));
             yield return new WaitForSecondsRealtime(0.08f);
             InputSystem.QueueStateEvent(_keyboard, new KeyboardState());
             StringAssert.StartsWith("hero_attack", controller.BodyRenderer.sprite.name, "공격할 때 hero_attack 프레임이어야 합니다");

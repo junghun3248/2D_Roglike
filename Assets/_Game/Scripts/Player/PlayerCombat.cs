@@ -8,17 +8,19 @@ using UnityEngine;
 namespace Roglike.Player
 {
     /// <summary>
-    /// 기본 공격 콤보와 타격 판정, 타격감(히트스톱·흔들림·줌·파편) 발생.
-    /// 공격 키를 누르고 있으면 콤보가 계속 이어진다 (메이플식 꾹 누르기).
+    /// 기본 단일 베기와 타격 판정, 타격감(히트스톱·흔들림·줌·파편) 발생.
+    /// 공격 키를 누르고 있으면 같은 베기를 일정한 간격으로 반복한다.
     /// </summary>
     [RequireComponent(typeof(PlayerController), typeof(PlayerInputReader), typeof(PlayerHitResolver))]
     [RequireComponent(typeof(ChargeAttackState))]
     public class PlayerCombat : MonoBehaviour
     {
-        [Header("Combo")]
-        [SerializeField] private AttackData[] _combo;
-        [SerializeField] private AttackData[] _airCombo;
-        [SerializeField] private AttackData[] _heavyCombo;
+        [Header("Attacks")]
+        [SerializeField] private AttackData _slash;
+        [SerializeField] private AttackData _heavy;
+        [SerializeField] private float _chargedLungeDistance = 4f;
+        [SerializeField] private float _chargedLungeDuration = 0.12f;
+        private bool _chargedLunging;
         [SerializeField] private AttackData _dashAttack;
         [SerializeField] private AttackData _launcher;
         [SerializeField] private AttackData _plunge;
@@ -26,7 +28,6 @@ namespace Roglike.Player
         [SerializeField] private float _dashAttackWindow = 0.15f;
         [SerializeField] private float _directionThreshold = 0.5f;
         [SerializeField] private float _attackBufferTime = 0.25f;
-        [SerializeField] private float _comboResetTime = 0.4f;
 
         [SerializeField] private Color _slashColor = new Color(0.85f, 0.95f, 1f, 0.9f);
 
@@ -35,7 +36,6 @@ namespace Roglike.Player
         private PlayerHitResolver _hitResolver;
         private PlayerStats _stats;
         private ChargeAttackState _charge;
-        private AttackData[] _sequence;
         private bool _plunging;
         private Vector2 _previousHitCenter;
         private readonly List<Collider2D> _hits = new List<Collider2D>(16);
@@ -43,11 +43,8 @@ namespace Roglike.Player
         private ContactFilter2D _filter;
 
         private AttackData _current;
-        private int _comboIndex;
-        private int _nextIndex;
         private float _attackTime;
         private float _bufferTimer;
-        private float _comboResetTimer;
         private bool _slashSpawned;
         private bool _checkedOnce;
         private bool _feedbackPlayed;
@@ -67,7 +64,7 @@ namespace Roglike.Player
 
         private void Update()
         {
-            if (_combo == null || _combo.Length == 0)
+            if (_slash == null)
             {
                 return;
             }
@@ -93,8 +90,21 @@ namespace Roglike.Player
             {
                 _current = null;
                 _plunging = false;
-                _sequence = null;
-                _nextIndex = 0;
+            }
+
+            if (_chargedLunging)
+            {
+                if (_controller.IsHurt || _controller.IsDashing)
+                {
+                    _chargedLunging = false;
+                    _controller.EndSkillMotion();
+                    return;
+                }
+                if (_controller.IsInSkill) return;
+                _chargedLunging = false;
+                _controller.EndSkillMotion();
+                StartAttack(_chargedStrike);
+                return;
             }
 
             bool released = _charge.Tick(dt, _current == null, out bool charged);
@@ -102,8 +112,13 @@ namespace Roglike.Player
             if (released && _controller.CanAttack)
             {
                 _bufferTimer = 0f;
-                if (charged) StartAttack(_chargedStrike);
-                else StartSequence(_heavyCombo);
+                if (charged)
+                {
+                    _chargedLunging = true;
+                    _controller.BeginSkillMotion(new Vector2(_controller.Facing * _chargedLungeDistance / _chargedLungeDuration, 0f),
+                        _chargedLungeDuration, true, true);
+                }
+                else StartAttack(_heavy);
                 return;
             }
             if (_current != null)
@@ -113,14 +128,7 @@ namespace Roglike.Player
                 return;
             }
 
-            _comboResetTimer -= dt;
-            if (_comboResetTimer <= 0f) _nextIndex = 0;
-            if (_controller.IsHurt || (_controller.IsInSkill && !_controller.IsPlunging)) return;
-            if (!_controller.IsGrounded && _input.HeavyPressed && _controller.CanAttack)
-            {
-                StartPlunge();
-                return;
-            }
+            if (_controller.IsHurt || _controller.IsInSkill) return;
             if (_bufferTimer <= 0f) return;
             if (_controller.TimeSinceDash <= _dashAttackWindow && _dashAttack != null)
                 StartAttack(_dashAttack);
@@ -128,15 +136,8 @@ namespace Roglike.Player
             {
                 if (!_controller.IsGrounded && _input.MoveY < -_directionThreshold) StartPlunge();
                 else if (_controller.IsGrounded && _input.MoveY > _directionThreshold) StartAttack(_launcher);
-                else StartSequence(_controller.IsGrounded ? _combo : _airCombo);
+                else StartAttack(_slash);
             }
-        }
-
-        private void StartSequence(AttackData[] sequence)
-        {
-            if (sequence == null || sequence.Length == 0) return;
-            int index = _sequence == sequence ? _nextIndex : 0;
-            StartAttack(sequence[Mathf.Clamp(index, 0, sequence.Length - 1)], sequence, index);
         }
 
         private void StartPlunge()
@@ -194,32 +195,14 @@ namespace Roglike.Player
                 }
             }
 
-            bool isLast = _sequence == null || _comboIndex >= _sequence.Length - 1;
-            float chainTime = Mathf.Max(_current.cancelTime, activeEnd);
-            if (!isLast && _sequence != _heavyCombo && _bufferTimer > 0f && _attackTime >= chainTime)
-            {
-                AttackData[] contextCombo = _controller.IsGrounded ? _combo : _airCombo;
-                if (_sequence != contextCombo) StartSequence(contextCombo);
-                else StartAttack(_sequence[_comboIndex + 1], _sequence, _comboIndex + 1);
-                return;
-            }
-
-            if (_attackTime >= _current.TotalDuration)
-            {
-                _current = null;
-                _nextIndex = isLast ? 0 : _comboIndex + 1;
-                _comboResetTimer = _comboResetTime;
-            }
+            if (_attackTime >= _current.TotalDuration) _current = null;
         }
 
-        private void StartAttack(AttackData attack, AttackData[] sequence = null, int index = 0)
+        private void StartAttack(AttackData attack)
         {
             if (attack == null) return;
             _controller.FaceInputDirection();
-            _sequence = sequence;
-            _comboIndex = index;
             _current = attack;
-            _nextIndex = 0;
             _attackTime = 0f;
             _bufferTimer = 0f;
             _slashSpawned = false;
@@ -288,35 +271,24 @@ namespace Roglike.Player
         private void OnDisable()
         {
             if (_controller == null) return;
-            if (_plunging && _controller.IsPlunging) _controller.EndSkillMotion();
+            if (_chargedLunging || (_plunging && _controller.IsPlunging)) _controller.EndSkillMotion();
             _controller.CancelAttack();
             _charge.Cancel();
+            _chargedLunging = false;
             _current = null;
-            _sequence = null;
+
             _plunging = false;
             _bufferTimer = 0f;
-            _nextIndex = 0;
+
         }
 
         private void OnDrawGizmosSelected()
         {
-            if (_combo == null)
-            {
-                return;
-            }
-
+            if (_slash == null) return;
             float facing = Application.isPlaying && _controller != null ? _controller.Facing : 1f;
             Gizmos.color = new Color(1f, 0.3f, 0.3f, 0.6f);
-            foreach (AttackData attack in _combo)
-            {
-                if (attack == null)
-                {
-                    continue;
-                }
-
-                Vector2 center = (Vector2)transform.position + new Vector2(attack.hitboxOffset.x * facing, attack.hitboxOffset.y);
-                Gizmos.DrawWireCube(center, attack.hitboxSize);
-            }
+            Vector2 center = (Vector2)transform.position + new Vector2(_slash.hitboxOffset.x * facing, _slash.hitboxOffset.y);
+            Gizmos.DrawWireCube(center, _slash.hitboxSize);
         }
     }
 }

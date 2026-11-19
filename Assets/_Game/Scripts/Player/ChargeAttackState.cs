@@ -7,6 +7,7 @@ namespace Roglike.Player
     [RequireComponent(typeof(PlayerController), typeof(PlayerInputReader))]
     public class ChargeAttackState : MonoBehaviour
     {
+        [SerializeField, Range(0.05f, 1f)] private float _focusScale = 0.4f;
         [SerializeField] private float _chargeDuration = 0.45f;
         // 그림 스프라이트의 기본 색이 흰색이라 흰색으로는 티가 안 난다 → 금빛.
         [SerializeField] private Color _chargeColor = new Color(1f, 0.85f, 0.35f);
@@ -38,15 +39,16 @@ namespace Roglike.Player
         {
             charged = false;
             if (_active && (!_controller.IsCharging || _controller.IsHurt || _controller.IsInSkill
-                || _controller.IsDashing || !_controller.IsGrounded)) Cancel();
+                || _controller.IsDashing)) Cancel();
 
-            if (!_active && canStart && _input.HeavyPressed && _controller.CanAttack && _controller.IsGrounded)
+            if (!_active && canStart && _input.HeavyPressed && _controller.CanAttack)
             {
                 _active = true;
                 _elapsed = 0f;
                 _ready = false;
                 _controller.FaceInputDirection();
                 _controller.SetCharging(true);
+                TimeController.Instance?.SetFocusScale(_focusScale);
             }
             if (!_active) return false;
             _elapsed += dt;
@@ -76,6 +78,7 @@ namespace Roglike.Player
             if (!_active) return;
             _active = false;
             _controller.SetCharging(false);
+            TimeController.Instance?.SetFocusScale(1f);
             SetTint(_baseColor);
         }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using UnityEngine;
 using UnityEngine.InputSystem;
 using UnityEngine.UI;
@@ -20,16 +20,17 @@ namespace Roglike.UI
         private void Awake()
         {
             _root = UiFactory.CreateCanvas("RestChoice", 60, transform).gameObject;
-            var dim = UiFactory.CreateImage("Dim", _root.transform, new Color(0.04f, 0.08f, 0.12f, 0.95f));
+            var dim = UiFactory.CreateImage("Dim", _root.transform, new Color(0f, 0f, 0f, 0.55f));
             UiFactory.Stretch(dim.rectTransform);
-            _choices = UiFactory.CreateText("Choices", _root.transform, 40, Color.white, TextAnchor.MiddleCenter);
+            var panel = UiFactory.CreatePanel(_root.transform, new Vector2(1100f, 650f), "RestPanel");
+            _choices = UiFactory.CreateText("Choices", panel, 40, Color.white, TextAnchor.MiddleCenter);
             UiFactory.Stretch(_choices.rectTransform);
             _actions = new InputActionMap("RestChoice");
             Add("Heal", () => Choose(true), "<Keyboard>/1");
             Add("Upgrade", () => Choose(false), "<Keyboard>/2");
             Add("Left", () => Select(0), "<Keyboard>/leftArrow", "<Gamepad>/dpad/left");
             Add("Right", () => Select(1), "<Keyboard>/rightArrow", "<Gamepad>/dpad/right");
-            Add("Confirm", () => Choose(_selected == 0), "<Keyboard>/space", "<Keyboard>/enter", "<Gamepad>/buttonSouth");
+            Add("Confirm", () => Choose(_selected == 0), "<Keyboard>/x", "<Keyboard>/space", "<Keyboard>/enter", "<Gamepad>/buttonSouth");
             Hide();
         }
 
@@ -47,7 +48,7 @@ namespace Roglike.UI
         private void Select(int index)
         {
             _selected = index;
-            _choices.text = $"휴식\n\n{(index == 0 ? "▶ " : "")} [1] {_healLabel}\n\n{(index == 1 ? "▶ " : "")} [2] 강화 1개 (희귀 이상 우선)\n\n← → 선택 · Space / Enter 결정";
+            _choices.text = $"휴식\n\n{(index == 0 ? "▶ " : "")} [1] {_healLabel}\n\n{(index == 1 ? "▶ " : "")} [2] 강화 1개 (희귀 이상 우선)\n\n← → 선택 · X / Space / Enter 결정";
         }
 
         private void Choose(bool heal)

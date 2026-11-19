@@ -49,22 +49,23 @@ namespace Roglike.UI
         {
             Canvas canvas = UiFactory.CreateCanvas("MetaShop", 75, transform);
             _root = canvas.gameObject;
-            Image dim = UiFactory.CreateImage("Dim", canvas.transform, new Color(0.025f, 0.04f, 0.08f, 0.97f));
+            Image dim = UiFactory.CreateImage("Dim", canvas.transform, new Color(0f, 0f, 0f, 0.6f));
             UiFactory.Stretch(dim.rectTransform);
+            UiFactory.CreatePanel(canvas.transform, new Vector2(1720f, 1000f), "ShopPanel");
             CreateLabel("Title", canvas.transform, "강화소", 58, new Vector2(-600f, 440f),
                 new Vector2(400f, 90f), TextAnchor.MiddleLeft);
             _crystals = CreateLabel("Crystals", canvas.transform, "", 40, new Vector2(550f, 450f),
                 new Vector2(500f, 60f), TextAnchor.MiddleRight);
             _earned = CreateLabel("Earned", canvas.transform, "", 28, new Vector2(550f, 395f),
                 new Vector2(500f, 50f), TextAnchor.MiddleRight);
-            CreateLabel("Hint", canvas.transform, "↑↓ 선택 · A / J 구매 · Space 다음 런 출발", 30,
+            CreateLabel("Hint", canvas.transform, "↑↓ 선택 · X / A / J 구매 · Space 다음 런 출발", 30,
                 new Vector2(0f, -455f), new Vector2(1600f, 70f), TextAnchor.MiddleCenter);
 
             _actions = new InputActionMap("MetaShop");
             AddButton("Up", () => Move(-1), "<Keyboard>/w", "<Keyboard>/upArrow", "<Gamepad>/dpad/up");
             AddButton("Down", () => Move(1), "<Keyboard>/s", "<Keyboard>/downArrow", "<Gamepad>/dpad/down");
             AddButton("Buy", BuySelected, "<Keyboard>/a", "<Keyboard>/j", "<Keyboard>/enter",
-                "<Keyboard>/numpadEnter", "<Gamepad>/buttonSouth");
+                "<Keyboard>/x", "<Keyboard>/numpadEnter", "<Gamepad>/buttonSouth");
             AddButton("StartRun", StartRun, "<Keyboard>/space", "<Gamepad>/start");
             _root.SetActive(false);
         }
@@ -112,14 +113,9 @@ namespace Roglike.UI
         private void BuildRow(MetaUpgradeData upgrade, int index, float spacing)
         {
             Vector2 position = new Vector2(0f, 340f - spacing * (index + 0.5f));
-            RectTransform rect = UiFactory.CreateRect("Meta_" + upgrade.id, _root.transform,
-                Vector2.one * 0.5f, Vector2.one * 0.5f, position, new Vector2(1600f, spacing - 10f));
-            Image frame = UiFactory.CreateImage("Frame", rect, Color.white);
-            UiFactory.Stretch(frame.rectTransform);
-            Image body = UiFactory.CreateImage("Body", rect, new Color(0.08f, 0.1f, 0.16f));
-            UiFactory.Stretch(body.rectTransform);
-            body.rectTransform.offsetMin = Vector2.one * 3f;
-            body.rectTransform.offsetMax = Vector2.one * -3f;
+            RectTransform rect = UiFactory.CreatePanel(_root.transform, new Vector2(1600f, spacing - 10f), "Meta_" + upgrade.id);
+            rect.anchoredPosition = position;
+            Image frame = rect.GetComponent<Image>();
             float height = spacing - 18f;
             CreateLabel("Name", rect, upgrade.displayName, 30, new Vector2(-610f, 0f),
                 new Vector2(320f, height), TextAnchor.MiddleLeft);

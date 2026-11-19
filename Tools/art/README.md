@@ -6,6 +6,11 @@ GPT가 만든 그림(`_imports/gpt/pilot/`)을 게임용 스프라이트로 바�
 python -I Tools/art/process_gpt_pilot.py
 ```
 
+주인공만 갱신할 때는 `python -I Tools/art/process_gpt_pilot.py --hero-only`를 사용한다.
+이 옵션은 기존 hero 프레임 PNG만 덮어쓰며 다른 그림과 `sheets.json`은 건드리지 않는다.
+몸체(청록색 검·스카프 제외)의 높이를 동작별 중앙값으로 ±8% 안에서 보정하고,
+발바닥을 고정한다. 달리기는 두 걸음에 맞춰 0–3px 높이 변화를 남긴다.
+
 - 출력: `Assets/_Game/Art/Generated/` — 애니메이션은 프레임별 PNG(`hero_idle/hero_idle_0.png` …), 배경 3겹, 바닥·발판 타일, `sheets.json`.
 - 하는 일: 투명 열로 프레임 자르기 → 반투명 테두리·배경 안개 제거 → 몸통 기준 발밑 정렬 → 주인공 96px·슬라임 56px로 축소 → 색 수 줄이기.
 - 다시 실행해도 결과가 같다. 그림을 새로 뽑으면 같은 파일 이름으로 `_imports/gpt/pilot/`에 넣고 다시 실행한 뒤,

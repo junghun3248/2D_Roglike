@@ -14,15 +14,18 @@ namespace Roglike.Core
         public static TimeController Instance { get; private set; }
 
         private float _overdriveScale = 1f;
+        private float _focusScale = 1f;
+        private float PlayerWorldScale => _overdriveScale < 1f ? _overdriveScale : _focusScale;
+        public bool IsFocusing => _focusScale < 1f;
         private float _pulseScale = 1f;
         private float _pulseUntil;
         private float _hitStopUntil;
 
         /// <summary>
-        /// 오버드라이브 감속을 무시하고 정상 속도로 움직여야 하는 대상(플레이어)이 곱할 배율.
+        /// 오버드라이브·차지 감속을 무시하고 정상 속도로 움직여야 하는 대상(플레이어)이 곱할 배율.
         /// 히트스톱·처치 연출 감속은 보정하지 않는다 (플레이어도 함께 멈칫해야 하므로).
         /// </summary>
-        public static float PlayerTimeMultiplier => Instance == null ? 1f : 1f / Instance._overdriveScale;
+        public static float PlayerTimeMultiplier => Instance == null ? 1f : 1f / Instance.PlayerWorldScale;
 
         public bool IsHitStopped => Time.unscaledTime < _hitStopUntil;
 
@@ -91,6 +94,13 @@ namespace Roglike.Core
             Apply();
         }
 
+        /// <summary>차지 중 주변 시간만 감속. 오버드라이브가 활성화되면 그 배율이 우선한다.</summary>
+        public void SetFocusScale(float scale)
+        {
+            _focusScale = Mathf.Clamp(scale, MinScale, 1f);
+            Apply();
+        }
+
         private void Apply()
         {
             if (IsPaused || IsHitStopped)
@@ -100,7 +110,7 @@ namespace Roglike.Core
             }
 
             float pulse = Time.unscaledTime < _pulseUntil ? _pulseScale : 1f;
-            float scale = Mathf.Max(MinScale * MinScale, _overdriveScale * pulse);
+            float scale = Mathf.Max(MinScale * MinScale, PlayerWorldScale * pulse);
             Time.timeScale = scale;
             // 감속 중에도 물리 스텝이 실시간 기준으로 촘촘하게 돌도록 함께 줄인다.
             Time.fixedDeltaTime = BaseFixedDeltaTime * scale;

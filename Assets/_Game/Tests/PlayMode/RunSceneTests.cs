@@ -68,6 +68,8 @@ namespace Roglike.Tests
             Assert.AreEqual(6, run.RoomCount);
             Assert.AreEqual(RoomType.Entrance, run.CurrentRoomType);
             Assert.AreEqual(0, run.EnemiesAlive);
+            Assert.IsInstanceOf<Roglike.Player.Skills.StasisFieldSkill>(
+                PlayerHealth().GetComponent<Roglike.Player.PlayerSkills>().Slots[0]);
             Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
             yield return EnterNextRoom(run);
             Assert.AreEqual(1, run.RoomIndex);
@@ -91,8 +93,10 @@ namespace Roglike.Tests
             Assert.AreEqual(0f, Time.timeScale, "강화 선택 중 게임이 멈추지 않았습니다");
 
             yield return new WaitForSecondsRealtime(0.5f);
-            yield return Tap(Key.Digit1);
-            Assert.IsFalse(choice.IsOpen, "1키로 선택되지 않았습니다");
+            yield return Tap(Key.Z);
+            Assert.IsTrue(choice.IsOpen, "점프는 강화를 확정하지 않는다");
+            yield return Tap(Key.X);
+            Assert.IsFalse(choice.IsOpen, "X키로 선택되지 않았습니다");
             Assert.Greater(stats.Modifiers.Count, 0, "선택한 강화가 적용되지 않았습니다");
 
             yield return PickUntil(() => run.CurrentRoom.RightDoorOpen && choice.IsOpen, choice, 40f);
@@ -199,10 +203,18 @@ namespace Roglike.Tests
             Assert.AreEqual(1, MetaProgression.Data.totalRuns, "런 기록이 저장되지 않았습니다");
 
             yield return new WaitForSecondsRealtime(0.8f);
-            yield return Tap(Key.A);
+            yield return Tap(Key.Z);
+            Assert.IsTrue(result.IsOpen, "Jump must not confirm a result screen");
+            yield return Tap(Key.X);
             Assert.IsTrue(shop.IsOpen, "결과 화면 다음에 강화소가 열려야 합니다");
 
+            MetaProgression.Data.crystals = 10000;
             yield return new WaitForSecondsRealtime(0.5f);
+            yield return Tap(Key.Z);
+            Assert.AreEqual(10000, MetaProgression.Crystals);
+            Assert.IsTrue(shop.IsOpen);
+            yield return Tap(Key.X);
+            Assert.Less(MetaProgression.Crystals, 10000, "X must buy the selected upgrade");
             yield return Tap(Key.Space);
             yield return new WaitForSecondsRealtime(1f);
             var newRun = Object.FindFirstObjectByType<RunManager>();
@@ -231,6 +243,19 @@ namespace Roglike.Tests
             }
 
             Assert.IsNotNull(boss, "보스가 나오지 않았습니다");
+            var barUI = Object.FindFirstObjectByType<BossHealthBar>();
+            var bar = (RectTransform)barUI.transform.Find("BossHealthCanvas/BossBar");
+            Assert.IsNotNull(bar);
+            var canvas = bar.GetComponentInParent<Canvas>();
+            Canvas.ForceUpdateCanvases();
+            // 보스 바는 화면 위 가운데: 캔버스 위쪽 절반, 좌하단 플레이어 묶음과 세로로 겹치지 않음.
+            Assert.Greater(canvas.transform.InverseTransformPoint(bar.TransformPoint(bar.rect.center)).y, 0f);
+            var cluster = Object.FindFirstObjectByType<HudController>().Cluster;
+            var barCorners = new Vector3[4];
+            var clusterCorners = new Vector3[4];
+            bar.GetWorldCorners(barCorners);
+            cluster.GetWorldCorners(clusterCorners);
+            Assert.Greater(barCorners[0].y, clusterCorners[1].y, "보스 바가 플레이어 묶음과 겹칩니다");
             var bossHealth = boss.GetComponent<Health>();
             var config = (RunConfig)typeof(RunManager).GetField("_config",
                 System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance).GetValue(run);
@@ -246,7 +271,8 @@ namespace Roglike.Tests
 
             yield return new WaitForSecondsRealtime(3.5f);
             Assert.IsTrue(result.IsOpen, "승리 결과 화면이 뜨지 않았습니다");
-            Assert.Greater(run.Kills, 20);
+            // 몹 수를 줄인 뒤(웨이브 약 60%) 한 판 처치 수는 15 안팎.
+            Assert.Greater(run.Kills, 10);
             Assert.Greater(run.CrystalsEarned, 40, "승리 보상 결정이 들어오지 않았습니다");
             Assert.AreEqual(1, MetaProgression.Data.victories);
         }
@@ -267,7 +293,9 @@ namespace Roglike.Tests
             double before = health.Current;
             health.SetInvulnerable(10000f);
             yield return new WaitForSecondsRealtime(0.5f);
-            yield return Tap(Key.Digit1);
+            yield return Tap(Key.Z);
+            Assert.IsTrue(rest.IsOpen);
+            yield return Tap(Key.X);
             Assert.IsFalse(rest.IsOpen);
             Assert.That(health.Current, Is.EqualTo(before + health.Max * 0.4).Within(0.01));
             Assert.IsTrue(run.CurrentRoom.RightDoorOpen);
@@ -296,9 +324,10 @@ namespace Roglike.Tests
             var run = Object.FindFirstObjectByType<RunManager>();
             var choice = Object.FindFirstObjectByType<UpgradeChoiceUI>();
             yield return PickUntil(() => run.CurrentRoomType == RoomType.Elite, choice, 90f);
-            Assert.GreaterOrEqual(run.EnemiesAlive, 1);
+            yield return new WaitForSecondsRealtime(0.5f);
+            Assert.AreEqual(2, run.EnemiesAlive);
             var elites = Object.FindObjectsByType<EliteModifier>(FindObjectsSortMode.None);
-            Assert.GreaterOrEqual(elites.Length, 1);
+            Assert.AreEqual(1, elites.Length);
             foreach (EliteModifier elite in elites) Assert.IsTrue(elite.IsElite);
             yield return ClearUntil(() => choice.IsOpen, 20f);
             Assert.IsTrue(choice.IsOpen);
@@ -306,6 +335,34 @@ namespace Roglike.Tests
             yield return new WaitForSecondsRealtime(0.5f);
             yield return Tap(Key.R);
             foreach (UpgradeData option in choice.Options) Assert.AreNotEqual(UpgradeRarity.Common, option.rarity);
+        }
+
+        [UnityTest]
+        public IEnumerator CombatRoom_CapsAliveAtFour_AndRefillsAfterDeath()
+        {
+            var run = Object.FindFirstObjectByType<RunManager>();
+            var config = (RunConfig)typeof(RunManager).GetField("_config",
+                System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic).GetValue(run);
+            WaveEntry wave = config.areas[0].rooms[1].waves[0];
+            int originalCount = wave.count;
+            wave.count = 6;
+            try
+            {
+                yield return EnterNextRoom(run);
+                Assert.AreEqual(4, run.EnemiesAlive);
+                yield return new WaitForSecondsRealtime(0.4f);
+                Assert.AreEqual(4, run.EnemiesAlive);
+                foreach (Health health in Object.FindObjectsByType<Health>(FindObjectsSortMode.None))
+                {
+                    if (health.Team != Team.Enemy || health.IsDead) continue;
+                    health.ClearInvulnerable();
+                    health.TryApplyDamage(new DamageInfo(health.Current + 1, false, health.transform.position, Vector2.zero, 0f, null));
+                    break;
+                }
+                yield return new WaitForSecondsRealtime(0.3f);
+                Assert.AreEqual(4, run.EnemiesAlive);
+            }
+            finally { wave.count = originalCount; }
         }
 
         private static Health PlayerHealth()

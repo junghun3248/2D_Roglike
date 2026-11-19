@@ -31,8 +31,11 @@ namespace Roglike.Player
         [Header("Dash")]
         [SerializeField] private float _dashSpeed = 24f;
         [SerializeField] private float _dashDuration = 0.16f;
-        [SerializeField] private float _dashCooldown = 0.4f;
+        [SerializeField] private float _dashGap = 0.06f;
+        [SerializeField] private float _dashInvulnerability = 0.1f;
         [SerializeField] private float _dashAfterimageInterval = 0.025f;
+
+        [SerializeField] private float _chargeMaxFallSpeed = 0.6f;
 
         [Header("Attack Motion")]
         [SerializeField] private float _attackLungeDecay = 14f;
@@ -144,14 +147,14 @@ namespace Roglike.Player
                 _jumpCutPending = true;
             }
 
-            if (_input.DashPressed && _dashCooldownTimer <= 0f && !IsHurt && (!IsInSkill || IsPlunging) && !(_airDashUsed && !IsGrounded))
+            if (_input.DashPressed && !IsDashing && _dashCooldownTimer <= 0f && !IsHurt && (!IsInSkill || IsPlunging) && !(_airDashUsed && !IsGrounded))
             {
                 StartDash();
             }
 
             _timeSinceDash = IsDashing ? 0f : _timeSinceDash + dt;
             _jumpBufferTimer -= dt;
-            _dashCooldownTimer -= dt;
+            if (!IsDashing) _dashCooldownTimer -= dt;
             _attackTimer -= dt;
             _hurtTimer -= dt;
 
@@ -244,6 +247,12 @@ namespace Roglike.Player
         public void SetCharging(bool charging)
         {
             IsCharging = charging;
+            if (charging && !IsGrounded)
+            {
+                _velocity.y = Mathf.Min(0f, _velocity.y);
+                _rigidbody.linearVelocity = _velocity * TimeController.PlayerTimeMultiplier;
+                _lastMultiplier = TimeController.PlayerTimeMultiplier;
+            }
         }
 
         public void BeginSkillMotion(Vector2 velocity, float duration, bool ignoreGravity, bool invulnerable)
@@ -331,7 +340,7 @@ namespace Roglike.Player
             FaceInputDirection();
             CancelAttack();
             _dashTimer = _dashDuration;
-            _dashCooldownTimer = _dashCooldown;
+            _dashCooldownTimer = _dashGap;
             _afterimageTimer = 0f;
             if (!IsGrounded)
             {
@@ -339,7 +348,7 @@ namespace Roglike.Player
             }
 
             // 대시 중 무적 (게임 시간 기준이므로 감속 보정).
-            _health?.SetInvulnerable(_dashDuration / TimeController.PlayerTimeMultiplier);
+            _health?.SetInvulnerable(_dashInvulnerability / TimeController.PlayerTimeMultiplier);
         }
 
         private void UpdateGrounded()
@@ -397,7 +406,7 @@ namespace Roglike.Player
 
         private void UpdateJump()
         {
-            if (IsHurt || _jumpBufferTimer <= 0f)
+            if (IsHurt || IsCharging || _jumpBufferTimer <= 0f)
             {
                 return;
             }
@@ -411,6 +420,7 @@ namespace Roglike.Player
             if (!canGroundJump)
             {
                 _jumpsLeft--;
+                _airDashUsed = false;
             }
 
             CancelAttack();
@@ -447,7 +457,7 @@ namespace Roglike.Player
             float gravity = _velocity.y < 0f ? _gravity * _fallGravityMultiplier : _gravity;
             _velocity.y -= gravity * dt;
 
-            float maxFall = IsAttacking ? _airAttackMaxFallSpeed : _maxFallSpeed;
+            float maxFall = IsCharging ? _chargeMaxFallSpeed : IsAttacking ? _airAttackMaxFallSpeed : _maxFallSpeed;
             _velocity.y = Mathf.Max(_velocity.y, -maxFall);
         }
 

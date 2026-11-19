@@ -14,8 +14,8 @@ namespace Roglike.EditorTools
             EnsureFolder(Folder);
             return new SkillDefinition[]
             {
-                Ensure<DashSlashSkill>("DashSlash", "돌진 베기", "돌진", "무적 돌진으로 적을 벤다.",
-                    new Color(0.3f, 0.85f, 1f), 4f, 2.5f, 0.09f, 0.4f, 8f),
+                Ensure<StasisFieldSkill>("StasisField", "정지 구역", "정지", "전방의 시간을 멈춘다. 정지한 적이 받는 피해 +30%.",
+                    new Color(0.55f, 0.9f, 1f), 6f, 1.5f, 0.04f, 0.2f, 8f),
                 Ensure<WhirlwindSkill>("Whirlwind", "회전 베기", "회전", "천천히 이동하며 주위를 연속 공격한다.",
                     new Color(0.45f, 1f, 0.5f), 6f, 0.6f, 0.04f, 0.2f, 2f),
                 Ensure<SwordWaveSkill>("SwordWave", "검기", "검기", "적을 관통하는 검기를 날린다.",

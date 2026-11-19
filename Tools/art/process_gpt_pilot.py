@@ -80,19 +80,41 @@ def quantize(img, colors):
     return rgb
 
 
-def body_anchor_x(img):
-    """몸통 기준 가로 위치. 청록색(검·검기·스카프)은 프레임마다 크게 달라서 빼고 무게중심을 잡는다."""
+def body_mask(img):
+    """청록색 검·검기·스카프를 제외한 몸체."""
     a = np.array(img).astype(np.int32)
     opaque = a[..., 3] > 0
     r, g, b = a[..., 0], a[..., 1], a[..., 2]
     cyan = (g > r + 40) & (b > r + 40)
     body = opaque & ~cyan
-    mask = body if body.sum() > 50 else opaque
-    xs = np.nonzero(mask)[1]
+    return body if body.sum() > 50 else opaque
+
+
+def body_bounds_y(img):
+    ys = np.nonzero(body_mask(img))[0]
+    return int(ys.min()), int(ys.max()) + 1
+
+
+def body_anchor_x(img):
+    """몸통 기준 가로 무게중심."""
+    xs = np.nonzero(body_mask(img))[1]
     return float(xs.mean()) if xs.size else img.width / 2
 
 
-def build_sheet(frames, scale, cell, colors, anchor_body=False):
+def stabilize_hero(frames, scale, name):
+    heights = [bottom - top for top, bottom in map(body_bounds_y, frames)]
+    median = float(np.median(heights))
+    # 두 걸음에 두 번 압축. 위치를 올리는 대신 키를 바꿔 발바닥은 고정한다.
+    bob = (0, 2, 3, 1, 0, 2, 3, 1) if name == "hero_run" else (0,) * len(frames)
+    result = []
+    for i, frame in enumerate(frames):
+        correction = float(np.clip((median - bob[i] / scale) / heights[i], 0.92, 1.08))
+        size = (round(frame.width * scale * correction), round(frame.height * scale * correction))
+        result.append(harden(frame.resize(size, Image.Resampling.LANCZOS)))
+    return result
+
+
+def build_sheet(frames, scale, cell, colors, anchor_body=False, body_baseline=False):
     cw, ch = cell
     sheet = Image.new("RGBA", (cw * len(frames), ch), (0, 0, 0, 0))
     for i, frame in enumerate(frames):
@@ -107,7 +129,7 @@ def build_sheet(frames, scale, cell, colors, anchor_body=False):
         x = min(max(x, i * cw), i * cw + cw - w)  # 칸 밖으로 나가면 안쪽으로 붙인다
         if w > cw:
             sys.exit(f"칸 폭({cw})보다 큰 프레임: {w}")
-        y = ch - h
+        y = ch - (body_bounds_y(small)[1] if body_baseline else h)
         sheet.alpha_composite(small, (x, y))
     return quantize(sheet, colors)
 
@@ -139,7 +161,7 @@ def make_tileable_x(img, blend):
     return Image.fromarray(a[:, : w - blend].round().astype(np.uint8), "RGBA")
 
 
-def main():
+def main(hero_only=False):
     os.makedirs(OUT, exist_ok=True)
     sheets = {}
 
@@ -161,14 +183,19 @@ def main():
     }
     for name, frames in hero_frames.items():
         scale = scales[name]
+        frames = stabilize_hero(frames, scale, name)
+        scale = 1.0
         # 칼 궤적 때문에 넓은 프레임이 있으면 칸 폭을 16단위로 늘린다 (발밑 가운데 기준이라 위치는 그대로).
         # 몸통 기준 정렬이라 칼 쪽으로 튀어나온 만큼 여유가 필요: 가장 넓은 프레임의 2배 폭까지 허용.
         widest = max(round(f.width * scale) for f in frames)
         tallest = max(round(f.height * scale) for f in frames)
         cell = (max(HERO_CELL[0], -(-int(widest * 1.6) // 16) * 16), max(HERO_CELL[1], -(-tallest // 16) * 16))
-        sheet = build_sheet(frames, scale, cell, SHEET_COLORS, anchor_body=True)
+        sheet = build_sheet(frames, scale, cell, SHEET_COLORS, anchor_body=True, body_baseline=True)
         save_frames(sheet, name, cell, len(frames))
         sheets[name] = {"cell": list(cell), "frames": len(frames), "pivot": [cell[0] / 2, 0]}
+
+    if hero_only:
+        return
 
     slime = slice_frames(load("slime_strip.png"), 6)
     slime_scale = SLIME_WIDTH / np.mean([f.width for f in slime[:4]])
@@ -231,4 +258,4 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    main(hero_only="--hero-only" in sys.argv)

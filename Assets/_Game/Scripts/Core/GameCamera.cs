@@ -13,7 +13,7 @@ namespace Roglike.Core
 
         [Header("Follow")]
         [SerializeField] private Transform _target;
-        [SerializeField] private Vector2 _offset = new Vector2(0f, 1.5f);
+        [SerializeField] private Vector2 _offset = new Vector2(0f, 2.65f);
         [SerializeField] private float _followSharpness = 7f;
         [SerializeField] private float _lookAhead = 1.5f;
 

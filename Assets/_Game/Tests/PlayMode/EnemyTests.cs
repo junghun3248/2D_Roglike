@@ -4,6 +4,10 @@ using NUnit.Framework;
 using Roglike.Combat;
 using Roglike.Core;
 using Roglike.Enemies;
+using Roglike.Player;
+using Roglike.Player.Skills;
+using Roglike.Progression;
+using System.Reflection;
 using UnityEngine;
 using UnityEngine.SceneManagement;
 using UnityEngine.TestTools;
@@ -168,6 +172,61 @@ namespace Roglike.Tests
         }
 
         // 셰이더 프로퍼티를 거치면 부동소수 오차가 생기므로 허용 오차로 비교한다.
+        [UnityTest]
+        public IEnumerator StasisField_FreezesBoarForOneSecond_AndAddsThirtyPercentDamage()
+        {
+            PlacePlayer(0f);
+            BoarEnemy boar = Spawn<BoarEnemy>("ClockworkBoar", 3f);
+            Health target = boar.GetComponent<Health>();
+            target.Configure(Team.Enemy, 1000);
+            var resolver = _player.GetComponent<PlayerHitResolver>();
+            _player.GetComponent<PlayerStats>().AddModifiers(new[]
+            {
+                new StatModifier(StatType.CritChance, ModifierKind.Multiply, 0f),
+            });
+            typeof(PlayerHitResolver).GetField("_damageVariance", BindingFlags.Instance | BindingFlags.NonPublic).SetValue(resolver, 0f);
+            var spec = new HitSpec(1f, Vector2.zero, 0f, 0f, 0f, 0f);
+            bool feedback = false;
+            double before = target.Current;
+            Assert.IsTrue(resolver.TryHit(target, target.GetComponent<Collider2D>(), _player.transform.position, spec, ref feedback));
+            double normalDamage = before - target.Current;
+            StasisFieldSkill skill = ScriptableObject.CreateInstance<StasisFieldSkill>();
+            try
+            {
+                yield return skill.Execute(new SkillContext(_player.GetComponent<PlayerController>(), resolver));
+                StatusEffects status = target.GetComponent<StatusEffects>();
+                Assert.IsTrue(status.IsFrozen);
+                float frozenX = boar.transform.position.x;
+                before = target.Current;
+                Assert.IsTrue(resolver.TryHit(target, target.GetComponent<Collider2D>(), _player.transform.position, spec, ref feedback));
+                Assert.That(before - target.Current, Is.EqualTo(normalDamage * 1.3).Within(0.001));
+                float until = Time.time + 1f;
+                while (Time.time < until)
+                {
+                    Assert.IsTrue(status.IsFrozen);
+                    // 얼기 직전 물리 정착으로 0.01 정도 밀릴 수 있어 0.05까지 허용 (멈춘 적은 초당 수 칸씩 움직이지 않는다).
+                    Assert.That(boar.transform.position.x, Is.EqualTo(frozenX).Within(0.05f));
+                    yield return null;
+                }
+                yield return new WaitForSeconds(0.6f);
+                Assert.IsFalse(status.IsFrozen);
+                Assert.That(status.DamageTakenMultiplier, Is.EqualTo(1f));
+            }
+            finally { Object.Destroy(skill); }
+        }
+
+        [UnityTest]
+        public IEnumerator Stasis_BossThawsAfterHalfSecond()
+        {
+            StagKingBoss boss = Spawn<StagKingBoss>("StagKing", 15f);
+            StatusEffects status = boss.GetComponent<StatusEffects>();
+            status.Freeze(1.5f);
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsTrue(status.IsFrozen);
+            yield return new WaitForSeconds(0.3f);
+            Assert.IsFalse(status.IsFrozen);
+        }
+
         private static void AssertColor(Color expected, Color actual)
         {
             Assert.That(actual.r, Is.EqualTo(expected.r).Within(0.01f));

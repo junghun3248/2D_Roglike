@@ -45,6 +45,7 @@ namespace Roglike.Enemies
         private readonly List<Collider2D> _contactHits = new List<Collider2D>(8);
         private Rigidbody2D _body;
         private Health _health;
+        private StatusEffects _status;
         private Health _player;
         private HitFlash _hitFlash;
         private Collider2D[] _colliders;
@@ -62,6 +63,8 @@ namespace Roglike.Enemies
 
         private void Awake()
         {
+            _status = GetComponent<StatusEffects>();
+            if (_status == null) _status = gameObject.AddComponent<StatusEffects>();
             _body = GetComponent<Rigidbody2D>();
             _health = GetComponent<Health>();
             _hitFlash = GetComponent<HitFlash>();
@@ -124,6 +127,7 @@ namespace Roglike.Enemies
 
         private void FixedUpdate()
         {
+            if (_status.IsFrozen) return;
             if (_state == State.Dead) return;
 
             float dt = Time.fixedDeltaTime;
@@ -275,6 +279,7 @@ namespace Roglike.Enemies
 
         private void LateUpdate()
         {
+            if (_status.IsFrozen) return;
             if (_visual == null) return;
             Vector3 scale = _visual.localScale;
             if (_state == State.Telegraph)

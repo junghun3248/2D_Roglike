@@ -78,22 +78,28 @@ namespace Roglike.Tests
             {
                 TimeController.Instance.SetPaused(false);
                 TimeController.Instance.SetOverdriveScale(1f);
+                TimeController.Instance.SetFocusScale(1f);
             }
             Time.timeScale = 1f;
             yield return null;
         }
 
         [UnityTest]
-        public IEnumerator AirCombo_HitsHeadHeightTargetTwiceWhileAirborne()
+        public IEnumerator HoldingX_RepeatsSameSlashWhileAirborne()
         {
-            Health target = PlaceSlime(0, new Vector2(1.2f, 1.8f));
-            Listen(target, true);
-            Press(Key.Space);
+            int airborneSwings = 0;
+            _player.GetComponent<PlayerCombat>().AttackStarted += duration =>
+            {
+                if (_player.IsGrounded) return;
+                Assert.That(duration, Is.EqualTo(0.27f).Within(0.01f));
+                airborneSwings++;
+            };
+            Press(Key.Z);
             yield return new WaitForSecondsRealtime(0.12f);
-            Press(Key.Space, Key.A);
-            yield return new WaitForSecondsRealtime(0.5f);
+            Press(Key.Z, Key.X);
+            yield return new WaitForSecondsRealtime(0.6f);
             Release();
-            Assert.GreaterOrEqual(_hitCount, 2);
+            Assert.GreaterOrEqual(airborneSwings, 2);
         }
 
         [UnityTest]
@@ -104,9 +110,9 @@ namespace Roglike.Tests
             double hp = target.Current;
             double secondHp = second.Current;
             float start = _player.transform.position.x;
-            Press(Key.LeftShift);
+            Press(Key.C);
             yield return new WaitForSecondsRealtime(0.05f);
-            Press(Key.A);
+            Press(Key.X);
             yield return null;
             yield return null;
             Release();
@@ -127,7 +133,7 @@ namespace Roglike.Tests
             target.GetComponent<Rigidbody2D>().bodyType = RigidbodyType2D.Dynamic;
             float startY = target.transform.position.y;
             float highest = startY;
-            Press(Key.UpArrow, Key.A);
+            Press(Key.UpArrow, Key.X);
             yield return null;
             yield return null;
             Release();
@@ -145,10 +151,10 @@ namespace Roglike.Tests
         {
             Health target = PlaceSlime(0, new Vector2(1.1f, -0.35f));
             double hp = target.Current;
-            Press(Key.Space);
+            Press(Key.Z);
             yield return new WaitForSecondsRealtime(0.18f);
             Assert.IsFalse(_player.IsGrounded);
-            Press(Key.DownArrow, Key.A);
+            Press(Key.DownArrow, Key.X);
             yield return null;
             yield return null;
             Release();
@@ -162,7 +168,7 @@ namespace Roglike.Tests
         {
             Health lightTarget = PlaceSlime(0, new Vector2(1.2f, -0.35f));
             Listen(lightTarget);
-            Press(Key.A);
+            Press(Key.X);
             yield return null;
             yield return null;
             Release();
@@ -186,12 +192,12 @@ namespace Roglike.Tests
             double heavy = _lastDamage;
             Assert.Greater(heavy, 0);
             heavyTarget.gameObject.SetActive(false);
-            Health target = PlaceSlime(1, new Vector2(1.2f, -0.35f));
+            Health target = PlaceSlime(1, new Vector2(5.2f, -0.35f));
             target.Configure(Team.Enemy, 1);
             Listen(target);
             bool killed = false;
             target.Died += info => killed = true;
-            Press(Key.S);
+            Press(Key.V);
             yield return new WaitForSecondsRealtime(0.6f);
             Assert.IsTrue(_player.IsCharging);
             Release();
@@ -216,7 +222,7 @@ namespace Roglike.Tests
         {
             Health target = PlaceSlime(0, new Vector2(1.2f, -0.35f));
             Listen(target);
-            Press(Key.S, Key.RightArrow);
+            Press(Key.V, Key.RightArrow);
             float x = _player.transform.position.x;
             yield return new WaitForSecondsRealtime(0.6f);
             Assert.That(_player.transform.position.x, Is.EqualTo(x).Within(0.2f));
@@ -230,9 +236,111 @@ namespace Roglike.Tests
             Assert.AreEqual(0, _hitCount);
         }
 
+        [UnityTest]
+        public IEnumerator HoldingX_RepeatsOneSlashAtSteadyRhythm()
+        {
+            var combat = _player.GetComponent<PlayerCombat>();
+            var starts = new System.Collections.Generic.List<float>();
+            var durations = new System.Collections.Generic.List<float>();
+            combat.AttackStarted += duration => { starts.Add(Time.time); durations.Add(duration); };
+            Press(Key.X);
+            yield return new WaitForSecondsRealtime(1.05f);
+            Release();
+            Assert.GreaterOrEqual(starts.Count, 3);
+            foreach (float duration in durations) Assert.That(duration, Is.EqualTo(0.27f).Within(0.01f));
+            for (int i = 1; i < starts.Count; i++)
+                Assert.That(starts[i] - starts[i - 1], Is.InRange(0.26f, 0.36f));
+        }
+
+        [UnityTest]
+        public IEnumerator GroundDash_FourTimesWithinOneSecond_HasVulnerableTail()
+        {
+            float started = Time.unscaledTime;
+            for (int i = 0; i < 4; i++)
+            {
+                Press(Key.C);
+                yield return null;
+                yield return null;
+                Assert.IsTrue(_player.IsDashing, $"Dash {i + 1}");
+                Release();
+                yield return new WaitForSecondsRealtime(0.105f);
+                Assert.IsFalse(_player.GetComponent<Health>().IsInvulnerable);
+                while (_player.IsDashing) yield return null;
+                if (i < 3) yield return new WaitForSecondsRealtime(0.065f);
+            }
+            Assert.Less(Time.unscaledTime - started, 1f);
+        }
+
+        [UnityTest]
+        public IEnumerator AirCharge_SlowsWorld_ThenLungesAtLeastThreeUnits()
+        {
+            Press(Key.Z);
+            yield return new WaitForSecondsRealtime(0.15f);
+            Press(Key.V);
+            yield return new WaitForSecondsRealtime(0.5f);
+            Assert.IsTrue(_player.IsCharging);
+            Assert.IsFalse(_player.IsGrounded);
+            Assert.That(Time.timeScale, Is.GreaterThan(0f).And.LessThan(0.5f));
+            float x = _player.transform.position.x;
+            Release();
+            yield return new WaitForSecondsRealtime(0.3f);
+            Assert.GreaterOrEqual((_player.transform.position.x - x) * _player.Facing, 3f);
+            Assert.IsFalse(_player.IsCharging);
+            Assert.That(Time.timeScale, Is.EqualTo(1f).Within(0.01f));
+        }
+
+        [UnityTest]
+        public IEnumerator Focus_OverdriveAndHitStopComposeWithoutDoubleSlow()
+        {
+            TimeController time = TimeController.Instance;
+            time.SetFocusScale(0.4f);
+            Assert.That(Time.timeScale, Is.EqualTo(0.4f).Within(0.001f));
+            time.SetOverdriveScale(0.25f);
+            Assert.That(Time.timeScale, Is.EqualTo(0.25f).Within(0.001f));
+            Assert.That(TimeController.PlayerTimeMultiplier, Is.EqualTo(4f));
+            time.HitStop(0.05f);
+            Assert.AreEqual(0f, Time.timeScale);
+            yield return new WaitForSecondsRealtime(0.1f);
+            Assert.That(Time.timeScale, Is.EqualTo(0.25f).Within(0.001f));
+            time.SetOverdriveScale(1f);
+            Assert.That(Time.timeScale, Is.EqualTo(0.4f).Within(0.001f));
+            time.SetFocusScale(1f);
+        }
+
+        [UnityTest]
+        public IEnumerator GroundCamera_PrototypeAndRun_FrameFloorNearBottom()
+        {
+            foreach (string scene in new[] { "Prototype", "Run" })
+            {
+                SceneManager.LoadScene(scene);
+                yield return new WaitForSecondsRealtime(0.1f);
+                foreach (EnemySpawner spawner in Object.FindObjectsByType<EnemySpawner>(FindObjectsSortMode.None))
+                    Object.Destroy(spawner.gameObject);
+                foreach (Health enemy in Object.FindObjectsByType<Health>(FindObjectsSortMode.None))
+                    if (enemy.Team == Team.Enemy) Object.Destroy(enemy.gameObject);
+                _player = Object.FindFirstObjectByType<PlayerController>();
+                yield return new WaitForSecondsRealtime(1f);
+                Assert.IsTrue(_player.IsGrounded, scene);
+                Bounds bounds = _player.GetComponent<BoxCollider2D>().bounds;
+                RaycastHit2D floor = Physics2D.Raycast(new Vector2(bounds.center.x, bounds.min.y + 0.1f),
+                    Vector2.down, 0.3f, GameLayers.GroundMask);
+                Assert.IsNotNull(floor.collider, scene);
+                Camera camera = GameCamera.Instance.GetComponent<Camera>();
+                float y = camera.WorldToViewportPoint(floor.point).y;
+                Assert.That(y, Is.InRange(0.18f, 0.28f), scene);
+                if (scene == "Run")
+                {
+                    var room = Object.FindFirstObjectByType<Roglike.Run.RunManager>().CurrentRoom;
+                    float halfWidth = camera.orthographicSize * camera.aspect;
+                    Assert.GreaterOrEqual(camera.transform.position.x - halfWidth, room.MinX - 0.1f);
+                    Assert.LessOrEqual(camera.transform.position.x + halfWidth, room.MaxX + 0.1f);
+                }
+            }
+        }
+
         private IEnumerator TapHeavy()
         {
-            Press(Key.S);
+            Press(Key.V);
             yield return new WaitForSecondsRealtime(0.05f);
             Release();
             yield return new WaitForSecondsRealtime(0.5f);

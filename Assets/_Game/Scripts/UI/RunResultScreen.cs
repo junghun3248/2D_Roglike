@@ -30,19 +30,21 @@ namespace Roglike.UI
             Image dim = UiFactory.CreateImage("Dim", canvas.transform, new Color(0.03f, 0.02f, 0.06f, 0.82f));
             UiFactory.Stretch((RectTransform)dim.transform);
 
-            _title = UiFactory.CreateText("Title", canvas.transform, 96, Color.white, TextAnchor.MiddleCenter);
+            var panel = UiFactory.CreatePanel(canvas.transform, new Vector2(1320f, 850f), "ResultPanel");
+            _title = UiFactory.CreateText("Title", panel, 96, Color.white, TextAnchor.MiddleCenter);
             Place(_title, new Vector2(0f, 250f), new Vector2(1200f, 140f));
 
-            _body = UiFactory.CreateText("Body", canvas.transform, 38, new Color(1f, 1f, 1f, 0.92f), TextAnchor.MiddleCenter);
+            _body = UiFactory.CreateText("Body", panel, 38, new Color(1f, 1f, 1f, 0.92f), TextAnchor.MiddleCenter);
             _body.lineSpacing = 1.3f;
             Place(_body, new Vector2(0f, -20f), new Vector2(1200f, 440f));
             _body.supportRichText = true;
 
-            _hint = UiFactory.CreateText("Hint", canvas.transform, 30, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
+            _hint = UiFactory.CreateText("Hint", panel, 30, new Color(1f, 1f, 1f, 0.7f), TextAnchor.MiddleCenter);
             Place(_hint, new Vector2(0f, -300f), new Vector2(1200f, 60f));
-            _hint.text = "A / J / Space / Enter  다시 시작";
+            _hint.text = "X / A / J / Space / Enter  다시 시작";
 
             _confirm = new InputAction("Restart", InputActionType.Button);
+            _confirm.AddBinding("<Keyboard>/x");
             _confirm.AddBinding("<Keyboard>/a");
             _confirm.AddBinding("<Keyboard>/j");
             _confirm.AddBinding("<Keyboard>/space");
@@ -62,7 +64,7 @@ namespace Roglike.UI
         {
             Show(summary, onContinue);
             _body.text += $"\n\n<color=#7FE3FF>결정 +{NumberFormat.ToKorean(crystalsEarned)}</color>";
-            _hint.text = "A / J / Space / Enter  계속 (강화소)";
+            _hint.text = "X / A / J / Space / Enter  계속 (강화소)";
         }
 
         public void Show(RunSummary summary, Action onRestart)

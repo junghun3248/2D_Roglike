@@ -13,6 +13,7 @@ namespace Roglike.Player
         [SerializeField] private SpriteAnimationData _run;
         [SerializeField] private SpriteAnimationData _attack;
         [SerializeField] private float _runThreshold = 0.5f;
+        [SerializeField] private int _airFrameIndex = 3;
         [Tooltip("스킬은 길이가 제각각이라 공격 동작을 이 길이로 한 번 재생한다 (플레이어 시간 초)")]
         [SerializeField] private float _skillAnimationDuration = 0.35f;
 
@@ -39,6 +40,7 @@ namespace Roglike.Player
 
         private void OnDisable()
         {
+            if (_animator != null) _animator.enabled = true;
             if (_combat != null)
             {
                 _combat.AttackStarted -= OnAttackStarted;
@@ -57,6 +59,7 @@ namespace Roglike.Player
                 return;
             }
 
+            _animator.enabled = true;
             _animator.PlayOnce(_attack, duration);
             _playingOneShot = true;
         }
@@ -87,10 +90,19 @@ namespace Roglike.Player
                 _playingOneShot = false;
             }
 
+            if (!_controller.IsGrounded && !inSkill && _run != null && _run.IsValid)
+            {
+                _animator.enabled = false;
+                _animator.Renderer.sprite = _run.frames[Mathf.Clamp(_airFrameIndex, 0, _run.frames.Length - 1)];
+                return;
+            }
+
+            bool wasHoldingAirPose = !_animator.enabled;
+            _animator.enabled = true;
             // 속도는 플레이어 시간 기준으로 되돌려 비교한다 (오버드라이브 중 물리 속도가 배로 커지므로).
             float speed = _body != null ? Mathf.Abs(_body.linearVelocity.x) / TimeController.PlayerTimeMultiplier : 0f;
             bool running = speed > _runThreshold;
-            _animator.Play(running && _run != null ? _run : _idle);
+            _animator.Play(running && _run != null ? _run : _idle, wasHoldingAirPose);
         }
     }
 }

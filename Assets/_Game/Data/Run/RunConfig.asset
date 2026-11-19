@@ -28,19 +28,19 @@ MonoBehaviour:
       layout: 1
       waves:
       - enemyPrefab: {fileID: 0}
-        count: 3
+        count: 2
       - enemyPrefab: {fileID: 0}
-        count: 4
+        count: 2
     - name: "\uBA48\uCD98 \uB098\uBB47\uAC00\uC9C0"
       type: 1
       layout: 2
       waves:
       - enemyPrefab: {fileID: 0}
+        count: 2
+      - enemyPrefab: {fileID: 0}
+        count: 3
+      - enemyPrefab: {fileID: 0}
         count: 4
-      - enemyPrefab: {fileID: 0}
-        count: 5
-      - enemyPrefab: {fileID: 0}
-        count: 6
     - name: "\uD734\uC2DD"
       type: 2
       layout: 3

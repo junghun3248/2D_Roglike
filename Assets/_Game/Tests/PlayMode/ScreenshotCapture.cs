@@ -40,19 +40,21 @@ namespace Roglike.Tests
             Capture(directory, "1_idle");
 
             var player = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
-            SlimeEnemy slime = UnityEngine.Object.FindObjectsByType<SlimeEnemy>(FindObjectsSortMode.None).First();
-            var body = slime.GetComponent<Rigidbody2D>();
+            // 연습장엔 이제 슬라임 대신 1지역 적이 나온다 → 아무 적이나 앞에 세운다.
+            var enemy = UnityEngine.Object.FindObjectsByType<Roglike.Combat.Health>(FindObjectsSortMode.None)
+                .First(h => h.Team == Roglike.Combat.Team.Enemy);
+            var body = enemy.GetComponent<Rigidbody2D>();
             body.position = (Vector2)player.transform.position + new Vector2(1.3f, -0.35f);
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.X));
             yield return new WaitForSecondsRealtime(0.12f);
             Capture(directory, "2_attack_hit");
             yield return new WaitForSecondsRealtime(0.5f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.F));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.Space));
             yield return new WaitForSecondsRealtime(0.4f);
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A, Key.RightArrow));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.X, Key.RightArrow));
             yield return new WaitForSecondsRealtime(0.35f);
             Capture(directory, "3_overdrive");
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
@@ -144,7 +146,7 @@ namespace Roglike.Tests
             yield return new WaitForSecondsRealtime(4f);
             yield return CaptureScreen(directory, "7_result");
 
-            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.A));
+            InputSystem.QueueStateEvent(keyboard, new KeyboardState(Key.X));
             yield return new WaitForSecondsRealtime(0.1f);
             InputSystem.QueueStateEvent(keyboard, new KeyboardState());
             yield return new WaitForSecondsRealtime(0.8f);
@@ -237,6 +239,13 @@ namespace Roglike.Tests
 
         private static void Capture(string directory, string name)
         {
+            // 캡처용으로 무적을 걸면 몸이 깜빡이는데, 꺼진 순간에 찍히면 주인공이 안 보이므로 캡처 때는 켠다.
+            var playerController = UnityEngine.Object.FindFirstObjectByType<PlayerController>();
+            if (playerController != null && playerController.BodyRenderer != null)
+            {
+                playerController.BodyRenderer.enabled = true;
+            }
+
             var overdrive = UnityEngine.Object.FindFirstObjectByType<OverdriveController>();
             int slashes = UnityEngine.Object.FindObjectsByType<Roglike.Combat.SlashEffect>(FindObjectsSortMode.None).Length;
             int sparks = UnityEngine.Object.FindObjectsByType<Roglike.Combat.HitSpark>(FindObjectsSortMode.None).Length;

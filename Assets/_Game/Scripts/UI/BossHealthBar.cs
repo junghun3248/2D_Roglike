@@ -1,5 +1,6 @@
 using Roglike.Combat;
 using Roglike.Core;
+using Roglike.Enemies;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -7,14 +8,20 @@ namespace Roglike.UI
 {
     public class BossHealthBar : MonoBehaviour
     {
-        // 왼쪽 위 HUD(체력·오버드라이브 라벨, x≈40~780)와 겹치지 않는 폭.
-        [SerializeField] private Vector2 _barSize = new Vector2(760f, 34f);
-        [SerializeField] private float _topOffset = 90f;
+        // 화면 위 가운데. 좌하단 플레이어 묶음과 넓은 하단 바가 겹치기 때문에 위로 올렸다 (장르에서 흔한 위치).
+        [SerializeField] private Vector2 _bottomBarSize = new Vector2(900f, 22f);
+        [SerializeField] private float _topOffset = 104f;
         [SerializeField] private float _trailDuration = 0.4f;
         [SerializeField] private float _trailDelay = 0.1f;
         [SerializeField] private float _deathHideDelay = 1f;
 
         private Canvas _canvas;
+        private CanvasGroup _group;
+        private RectTransform _bar;
+        private Image _plateImage, _fillImage;
+        private StagKingBoss _stag;
+        private float _shownAt;
+        [SerializeField] private float _slideDuration = 0.3f;
         private RectTransform _fill;
         private RectTransform _trail;
         private Text _nameText;
@@ -34,21 +41,27 @@ namespace Roglike.UI
         {
             if (_canvas != null) return;
             _canvas = UiFactory.CreateCanvas("BossHealthCanvas", 35, transform);
-            RectTransform bar = UiFactory.CreateRect("BossBar", _canvas.transform,
-                new Vector2(0.5f, 1f), new Vector2(0.5f, 1f), new Vector2(0f, -_topOffset), _barSize);
-            Image background = UiFactory.CreateImage("Background", bar, new Color(0.12f, 0.04f, 0.05f, 0.95f));
+            _group = _canvas.gameObject.AddComponent<CanvasGroup>();
+            RectTransform bar = UiFactory.CreatePanel(_canvas.transform, _bottomBarSize, "BossBar");
+            _bar = bar;
+            bar.anchorMin = bar.anchorMax = new Vector2(0.5f, 1f);
+            bar.anchoredPosition = new Vector2(0f, -_topOffset);
+            var content = UiFactory.CreateRect("BarContent", bar, Vector2.one * 0.5f, Vector2.one * 0.5f,
+                Vector2.zero, _bottomBarSize - Vector2.one * 4f);
+            Image background = UiFactory.CreateImage("Background", content, UiTheme.HealthBack);
             UiFactory.Stretch(background.rectTransform);
-            _trail = UiFactory.CreateImage("Trail", bar, Color.white).rectTransform;
+            _trail = UiFactory.CreateImage("Trail", content, Color.white).rectTransform;
             UiFactory.Stretch(_trail);
-            _fill = UiFactory.CreateImage("Health", bar, new Color(0.85f, 0.12f, 0.18f)).rectTransform;
+            _fillImage = UiFactory.CreateImage("Health", content, UiTheme.Health);
+            _fill = _fillImage.rectTransform;
             UiFactory.Stretch(_fill);
-            _nameText = UiFactory.CreateText("Name", bar, 30, Color.white, TextAnchor.MiddleCenter);
-            RectTransform nameRect = _nameText.rectTransform;
-            nameRect.anchorMin = new Vector2(0f, 1f);
-            nameRect.anchorMax = Vector2.one;
-            nameRect.pivot = new Vector2(0.5f, 0f);
-            nameRect.sizeDelta = new Vector2(0f, 44f);
-            nameRect.anchoredPosition = new Vector2(0f, 8f);
+            var plate = UiFactory.CreatePanel(bar, new Vector2(340f, 42f), "BossNamePlate");
+            plate.anchoredPosition = new Vector2(0f, 44f);
+            _plateImage = plate.GetComponent<Image>();
+            _nameText = UiFactory.CreateText("Name", plate, 26, UiTheme.Text, TextAnchor.MiddleCenter);
+            UiFactory.Stretch(_nameText.rectTransform);
+            var tick = UiFactory.CreateImage("PhaseMarker", bar, UiTheme.Gold);
+            tick.rectTransform.sizeDelta = new Vector2(2f, 30f);
             _healthText = UiFactory.CreateText("HealthText", bar, 22, Color.white, TextAnchor.MiddleCenter);
             UiFactory.Stretch(_healthText.rectTransform);
             _canvas.gameObject.SetActive(false);
@@ -60,6 +73,9 @@ namespace Roglike.UI
             if (health == null) return;
             Build();
             _health = health;
+            _stag = health.GetComponent<StagKingBoss>();
+            _shownAt = Time.unscaledTime;
+            _group.alpha = 0f;
             _nameText.text = displayName;
             _health.Changed += OnHealthChanged;
             _health.Died += OnDied;
@@ -102,6 +118,13 @@ namespace Roglike.UI
         {
             if (_canvas == null || !_canvas.gameObject.activeSelf) return;
             float dt = Time.unscaledDeltaTime;
+            float entrance = Mathf.Clamp01((Time.unscaledTime - _shownAt) / Mathf.Max(0.01f, _slideDuration));
+            // 위에서 미끄러져 내려온다.
+            _bar.anchoredPosition = new Vector2(0f, Mathf.Lerp(60f, -_topOffset, Mathf.SmoothStep(0f, 1f, entrance)));
+            _group.alpha = _hideTimer >= 0f ? Mathf.Clamp01(_hideTimer / Mathf.Max(0.01f, _deathHideDelay)) : entrance;
+            bool enraged = _stag != null && _stag.IsEnraged;
+            _fillImage.color = enraged ? UiTheme.Enraged : UiTheme.Health;
+            _plateImage.color = enraged ? Color.Lerp(UiTheme.Enraged, Color.white, (1f + Mathf.Sin(Time.unscaledTime * 6f)) * 0.3f) : UiTheme.Gold;
             if (_hideTimer >= 0f)
             {
                 _hideTimer -= dt;

@@ -77,6 +77,7 @@ namespace Roglike.Tests
         public IEnumerator Prototype_HasFourSkills_AndRejectsDuplicateOrFullEquip()
         {
             Assert.AreEqual(4, _skills.Slots.Count);
+            Assert.IsInstanceOf<Roglike.Player.Skills.StasisFieldSkill>(_skills.Slots[0], "Run Roglike/Apply Playtest Feedback after script import.");
             foreach (var skill in _skills.Slots)
             {
                 Assert.IsNotNull(skill);
@@ -90,22 +91,23 @@ namespace Roglike.Tests
         }
 
         [UnityTest]
-        public IEnumerator DashSlash_MovesHits_AndCannotRecastOnCooldown()
+        public IEnumerator StasisField_HitsFreezesWithoutMoving_AndCannotRecastOnCooldown()
         {
             Health target = PlaceSlime(0, 2f);
             double health = target.Current;
             float start = _player.transform.position.x;
-            Press(Key.Q);
+            Press(Key.A);
             yield return null;
             yield return null;
             Release();
             Assert.Greater(_skills.CooldownRemaining(0), 0f);
             yield return new WaitForSecondsRealtime(0.6f);
-            Assert.GreaterOrEqual((_player.transform.position.x - start) * _player.Facing, 3f);
+            Assert.That(_player.transform.position.x, Is.EqualTo(start).Within(0.2f));
+            Assert.IsTrue(target.GetComponent<StatusEffects>().IsFrozen);
             Assert.Less(target.Current, health);
             float cooldown = _skills.CooldownRemaining(0);
             float position = _player.transform.position.x;
-            Press(Key.Q);
+            Press(Key.A);
             yield return new WaitForSecondsRealtime(0.2f);
             Release();
             Assert.Less(_skills.CooldownRemaining(0), cooldown);
@@ -119,7 +121,7 @@ namespace Roglike.Tests
             int hits = 0;
             _damageListener = (health, info) => { if (health == target) hits++; };
             Health.AnyDamaged += _damageListener;
-            Press(Key.W);
+            Press(Key.S);
             yield return new WaitForSecondsRealtime(1f);
             Release();
             Assert.GreaterOrEqual(hits, 3);
@@ -132,7 +134,7 @@ namespace Roglike.Tests
             Health second = PlaceSlime(1, 5f);
             double firstHealth = first.Current;
             double secondHealth = second.Current;
-            Press(Key.E);
+            Press(Key.D);
             yield return new WaitForSecondsRealtime(0.8f);
             Release();
             Assert.Less(first.Current, firstHealth);
@@ -145,7 +147,7 @@ namespace Roglike.Tests
             Health target = PlaceSlime(0, 1.8f);
             double health = target.Current;
             float initialY = _player.transform.position.y;
-            Press(Key.R);
+            Press(Key.F);
             yield return new WaitForSecondsRealtime(0.08f);
             Release();
             Assert.Greater(_player.transform.position.y, initialY);
@@ -157,12 +159,12 @@ namespace Roglike.Tests
         [UnityTest]
         public IEnumerator Overdrive_CooldownUsesPlayerTime_NotSlowedWorldTime()
         {
-            Press(Key.F);
+            Press(Key.Space);
             yield return new WaitForSecondsRealtime(0.3f);
             Release();
             Assert.IsTrue(_player.GetComponent<OverdriveController>().IsActive);
             yield return null;
-            Press(Key.Q);
+            Press(Key.A);
             yield return new WaitForSecondsRealtime(0.4f);
             Release();
             Assert.IsFalse(_skills.IsReady(0));
@@ -180,7 +182,7 @@ namespace Roglike.Tests
         [UnityTest]
         public IEnumerator Hurt_CancelsWhirlwind_AndPreservesHurtMotion()
         {
-            Press(Key.W);
+            Press(Key.S);
             yield return new WaitForSecondsRealtime(0.15f);
             Release();
             Assert.IsTrue(_player.IsInSkill);

@@ -223,8 +223,8 @@ namespace Roglike.EditorTools
                         rooms = new[]
                         {
                             Room("입구", RoomType.Entrance, 0),
-                            Room("숲길", RoomType.Combat, 1, 3, 4),
-                            Room("멈춘 나뭇가지", RoomType.Combat, 2, 4, 5, 6),
+                            Room("숲길", RoomType.Combat, 1, 2, 2),
+                            Room("멈춘 나뭇가지", RoomType.Combat, 2, 2, 3, 4),
                             Room("휴식", RoomType.Rest, 3),
                             Room("엘리트!", RoomType.Elite, 4, 2),
                             Room("태엽 사슴왕", RoomType.Boss, 5),
@@ -281,7 +281,7 @@ namespace Roglike.EditorTools
             SetObjectArray(skills, "_startingSkills", startingSkills);
 
             var combat = player.AddComponent<PlayerCombat>();
-            SetObjectArray(combat, "_combo", combo);
+            SetObject(combat, "_slash", combo[0]);
             MovesetLibraryBuilder.Configure(combat);
 
             var flash = player.AddComponent<HitFlash>();
@@ -362,7 +362,7 @@ namespace Roglike.EditorTools
             SetObject(component, "_enemyPrefab", enemyPool[0]);
             SetObjectArray(component, "_enemyPool", enemyPool);
             SetObjectArray(component, "_spawnPoints", transforms);
-            SetInt(component, "_maxAlive", 6);
+            SetInt(component, "_maxAlive", 3);
         }
 
         // ---------- 맵 ----------
@@ -486,6 +486,7 @@ namespace Roglike.EditorTools
             var hud = systems.AddComponent<HudController>();
             SetObject(hud, "_playerHealth", player.GetComponent<Health>());
             SetObject(hud, "_overdrive", overdrive);
+            SetObject(hud, "_circleSprite", _circle);
 
             var skillBar = systems.AddComponent<SkillBarUI>();
             SetObject(skillBar, "_skills", player.GetComponent<PlayerSkills>());
@@ -502,24 +503,10 @@ namespace Roglike.EditorTools
             {
                 EnsureAttack("Attack1", a =>
                 {
-                    a.damageMultiplier = 1f; a.startup = 0.05f; a.active = 0.08f; a.recovery = 0.2f; a.cancelTime = 0.13f;
+                    a.damageMultiplier = 1f; a.startup = 0.05f; a.active = 0.08f; a.recovery = 0.14f; a.cancelTime = 0.27f;
                     a.lungeSpeed = 5f; a.knockback = new Vector2(4f, 1.5f); a.hitStun = 0.25f;
                     a.hitStop = 0.05f; a.shake = 0.15f; a.overdriveGain = 5f; a.slashAngle = -15f;
                     a.hitboxOffset = new Vector2(1f, 0.1f); a.hitboxSize = new Vector2(2f, 1.3f);
-                }),
-                EnsureAttack("Attack2", a =>
-                {
-                    a.damageMultiplier = 1.2f; a.startup = 0.05f; a.active = 0.08f; a.recovery = 0.22f; a.cancelTime = 0.14f;
-                    a.lungeSpeed = 6f; a.knockback = new Vector2(5f, 2f); a.hitStun = 0.28f;
-                    a.hitStop = 0.06f; a.shake = 0.2f; a.overdriveGain = 6f; a.slashAngle = 15f;
-                    a.hitboxOffset = new Vector2(1f, 0.1f); a.hitboxSize = new Vector2(2.1f, 1.4f);
-                }),
-                EnsureAttack("Attack3_Finisher", a =>
-                {
-                    a.damageMultiplier = 2.2f; a.startup = 0.09f; a.active = 0.1f; a.recovery = 0.32f; a.cancelTime = 0.3f;
-                    a.lungeSpeed = 9f; a.knockback = new Vector2(12f, 5f); a.hitStun = 0.45f;
-                    a.hitStop = 0.12f; a.shake = 0.45f; a.overdriveGain = 10f; a.slashAngle = 0f; a.isFinisher = true;
-                    a.hitboxOffset = new Vector2(1.3f, 0.1f); a.hitboxSize = new Vector2(2.6f, 1.6f);
                 }),
             };
         }
