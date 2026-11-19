@@ -31,7 +31,7 @@ namespace Roglike.UI
         private RectTransform _list;
         private Text _toast;
         private RectTransform _toastPlate, _detailPanel;
-        private Text _details;
+        private RectTransform _details;
         private float _toastUntil;
 
         private void Awake() => EnsureUI();
@@ -61,11 +61,10 @@ namespace Roglike.UI
             _detailPanel.anchorMin = _detailPanel.anchorMax = new Vector2(0f, 1f);
             _detailPanel.pivot = new Vector2(0f, 1f);
             _detailPanel.anchoredPosition = new Vector2(145f, -32f);
-            _details = UiFactory.CreateText("Details", _detailPanel, 22, UiTheme.Text, TextAnchor.UpperLeft);
-            UiFactory.Stretch(_details.rectTransform);
-            _details.rectTransform.offsetMin = new Vector2(24f, 20f);
-            _details.rectTransform.offsetMax = new Vector2(-24f, -20f);
-            _details.horizontalOverflow = HorizontalWrapMode.Wrap;
+            _details = UiFactory.CreateRect("Details", _detailPanel, Vector2.zero, Vector2.zero, Vector2.zero, Vector2.zero);
+            UiFactory.Stretch(_details);
+            _details.offsetMin = Vector2.one * UiTheme.DetailPadding;
+            _details.offsetMax = -Vector2.one * UiTheme.DetailPadding;
             _detailPanel.gameObject.SetActive(false);
             _toastPlate = UiFactory.CreatePanel(_canvas.transform, new Vector2(700f, 90f), "SynergyToastPlate");
             _toast = UiFactory.CreateText("SynergyToast", _toastPlate, 36, UiTheme.Gold, TextAnchor.MiddleCenter);
@@ -94,32 +93,35 @@ namespace Roglike.UI
                 Destroy(row.rect.gameObject);
             }
             _rows.Clear();
-            var details = new StringBuilder();
+            foreach (Transform child in _details)
+            {
+                child.gameObject.SetActive(false);
+                Destroy(child.gameObject);
+            }
+            float detailHeight = 0f;
             for (int i = 0; i < visible.Count; i++)
             {
                 SynergyData synergy = visible[i];
                 int active = _tracker.ActiveTierIndex(synergy.tag);
                 int count = _tracker.Count(synergy.tag);
                 RectTransform rect = UiFactory.CreateRect(synergy.name, _list, new Vector2(0f, 1f),
-                    new Vector2(0f, 1f), new Vector2(0f, -i * _badgeHeight), new Vector2(96f, _badgeHeight));
+                    new Vector2(0f, 1f), new Vector2(0f, -i * _badgeHeight), new Vector2(UiTheme.TraitBadgeWidth, _badgeHeight));
                 CanvasGroup group = rect.gameObject.AddComponent<CanvasGroup>();
                 group.blocksRaycasts = false;
-                group.alpha = active >= 0 ? 1f : 0.5f;
-                Image icon = UiFactory.CreateImage("Color", rect, synergy.color);
-                icon.sprite = UiFactory.RoundedSquare;
-                icon.type = Image.Type.Sliced;
-                icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(0f, 0.5f);
-                icon.rectTransform.anchoredPosition = new Vector2(14f, 0f);
-                icon.rectTransform.sizeDelta = new Vector2(32f, 32f);
+                group.alpha = active >= 0 ? 1f : UiTheme.InactiveAlpha;
+                RectTransform plate = UiFactory.CreateTraitPlate(rect, synergy, active >= 0);
+                plate.anchorMin = plate.anchorMax = new Vector2(0f, 0.5f);
+                plate.anchoredPosition = new Vector2(UiTheme.TraitPlateSize * 0.5f, 0f);
                 Text label = UiFactory.CreateText("Progress", rect, 22, Color.white, TextAnchor.MiddleLeft);
                 UiFactory.Stretch(label.rectTransform);
-                label.rectTransform.offsetMin = new Vector2(38f, 0f);
+                label.rectTransform.offsetMin = new Vector2(UiTheme.TraitCountOffset, 0f);
                 var pips = new StringBuilder();
                 int tierCount = synergy.tiers?.Length ?? 0;
                 for (int t = 0; t < tierCount; t++) pips.Append(t <= active ? '●' : '○');
                 string progress = active + 1 < tierCount && synergy.tiers[active + 1] != null
-                    ? $"{count} / {synergy.tiers[active + 1].threshold}" : $"{count} / MAX";
+                    ? $"{count}/{synergy.tiers[active + 1].threshold}" : $"{count}/MAX";
                 label.text = progress;
+                var details = new StringBuilder();
                 details.Append(synergy.displayName).Append("  ").Append(progress).Append("  ").Append(pips).AppendLine();
                 for (int t = 0; t < tierCount; t++)
                 {
@@ -128,11 +130,23 @@ namespace Roglike.UI
                     details.Append(t == active ? "[ON] " : "").Append(tier.threshold).Append(": ")
                         .Append(UpgradeText.Describe(tier.modifiers)).AppendLine();
                 }
-                details.AppendLine();
+                Text detail = UiFactory.CreateText("TraitDetails", _details, 22, UiTheme.Text, TextAnchor.UpperLeft);
+                detail.text = details.ToString();
+                detail.horizontalOverflow = HorizontalWrapMode.Wrap;
+                float inset = UiTheme.TraitPlateSize + UiTheme.DetailIconGap;
+                detail.rectTransform.anchorMin = detail.rectTransform.anchorMax = new Vector2(0f, 1f);
+                detail.rectTransform.pivot = new Vector2(0f, 1f);
+                detail.rectTransform.anchoredPosition = new Vector2(inset, -detailHeight);
+                detail.rectTransform.sizeDelta = new Vector2(_detailPanel.sizeDelta.x - UiTheme.DetailPadding * 2f - inset, 0f);
+                detail.rectTransform.sizeDelta = new Vector2(detail.rectTransform.sizeDelta.x, detail.preferredHeight);
+                RectTransform detailIcon = UiFactory.CreateTraitPlate(_details, synergy, active >= 0);
+                detailIcon.anchorMin = detailIcon.anchorMax = new Vector2(0f, 1f);
+                detailIcon.pivot = new Vector2(0f, 1f);
+                detailIcon.anchoredPosition = new Vector2(0f, -detailHeight);
+                detailHeight += Mathf.Max(detail.preferredHeight, UiTheme.TraitPlateSize) + UiTheme.DetailIconGap;
                 _rows.Add(synergy, new Row { rect = rect, group = group, alpha = group.alpha });
             }
-            _details.text = details.ToString();
-            _detailPanel.sizeDelta = new Vector2(600f, Mathf.Min(950f, Mathf.Max(150f, _details.preferredHeight + 40f)));
+            _detailPanel.sizeDelta = new Vector2(600f, Mathf.Max(150f, detailHeight + UiTheme.DetailPadding * 2f));
         }
 
         private void OnTierReached(SynergyData synergy, int tierIndex)

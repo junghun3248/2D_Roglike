@@ -472,8 +472,11 @@ namespace Roglike.EditorTools
             var systems = new GameObject("Systems");
             systems.AddComponent<GameBootstrap>();
             systems.AddComponent<TimeController>();
+            var sfx = systems.AddComponent<SfxPlayer>();
+            SetObject(sfx, "_library", SfxLibraryBuilder.Ensure());
 
             var vfx = systems.AddComponent<VfxSprites>();
+            VfxAnimationBuilder.Configure(vfx);
             SetObject(vfx, "_square", _square);
             SetObject(vfx, "_circle", _circle);
             SetObject(vfx, "_material", _material);
@@ -487,6 +490,8 @@ namespace Roglike.EditorTools
             SetObject(hud, "_playerHealth", player.GetComponent<Health>());
             SetObject(hud, "_overdrive", overdrive);
             SetObject(hud, "_circleSprite", _circle);
+            SetObject(hud, "_portraitSprite", AssetDatabase.LoadAssetAtPath<Sprite>(
+                "Assets/_Game/Art/Generated/ui/portrait_hero.png"));
 
             var skillBar = systems.AddComponent<SkillBarUI>();
             SetObject(skillBar, "_skills", player.GetComponent<PlayerSkills>());
@@ -499,37 +504,8 @@ namespace Roglike.EditorTools
 
         private static AttackData[] EnsureCombo()
         {
-            return new[]
-            {
-                EnsureAttack("Attack1", a =>
-                {
-                    a.damageMultiplier = 1f; a.startup = 0.05f; a.active = 0.08f; a.recovery = 0.14f; a.cancelTime = 0.27f;
-                    a.lungeSpeed = 5f; a.knockback = new Vector2(4f, 1.5f); a.hitStun = 0.25f;
-                    a.hitStop = 0.05f; a.shake = 0.15f; a.overdriveGain = 5f; a.slashAngle = -15f;
-                    a.hitboxOffset = new Vector2(1f, 0.1f); a.hitboxSize = new Vector2(2f, 1.3f);
-                }),
-            };
+            return new[] { MovesetLibraryBuilder.EnsureNormalSlash("Attack1", false) };
         }
-
-        private static AttackData EnsureAttack(string name, System.Action<AttackData> configure)
-        {
-            string path = $"{AttackFolder}/{name}.asset";
-            var existing = AssetDatabase.LoadAssetAtPath<AttackData>(path);
-            if (existing != null)
-            {
-                return existing;
-            }
-
-            var attack = ScriptableObject.CreateInstance<AttackData>();
-            configure(attack);
-            AssetDatabase.CreateAsset(attack, path);
-            // 새로 만든 에셋은 저장·재로드한 뒤 참조해야 씬에 참조가 남는다.
-            AssetDatabase.SaveAssets();
-            AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
-            return AssetDatabase.LoadAssetAtPath<AttackData>(path);
-        }
-
-        // ---------- 자리표시 스프라이트 ----------
 
         private static Sprite EnsureSprite(string name, bool circle)
         {

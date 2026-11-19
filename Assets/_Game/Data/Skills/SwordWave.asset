@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6154c875441819840b264d3d260d87d1, type: 3}
   m_Name: SwordWave
   m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.SwordWaveSkill
+  _icon: {fileID: 21300000, guid: e08410721c2e5ecba68419b9c4dd95be, type: 3}
   _id: SwordWave
   _displayName: "\uAC80\uAE30"
   _shortName: "\uAC80\uAE30"

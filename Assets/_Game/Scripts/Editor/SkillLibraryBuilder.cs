@@ -12,6 +12,8 @@ namespace Roglike.EditorTools
         public static SkillDefinition[] EnsureDefaultSkills()
         {
             EnsureFolder(Folder);
+            foreach (string guid in AssetDatabase.FindAssets("t:SkillDefinition", new[] { Folder }))
+                AssignIcon(AssetDatabase.LoadAssetAtPath<SkillDefinition>(AssetDatabase.GUIDToAssetPath(guid)));
             return new SkillDefinition[]
             {
                 Ensure<StasisFieldSkill>("StasisField", "정지 구역", "정지", "전방의 시간을 멈춘다. 정지한 적이 받는 피해 +30%.",
@@ -30,7 +32,11 @@ namespace Roglike.EditorTools
         {
             string path = $"{Folder}/{id}.asset";
             T existing = AssetDatabase.LoadAssetAtPath<T>(path);
-            if (existing != null) return existing;
+            if (existing != null)
+            {
+                AssignIcon(existing);
+                return existing;
+            }
             T skill = ScriptableObject.CreateInstance<T>();
             var serialized = new SerializedObject(skill);
             serialized.FindProperty("_id").stringValue = id;
@@ -44,10 +50,19 @@ namespace Roglike.EditorTools
             serialized.FindProperty("_shake").floatValue = shake;
             serialized.FindProperty("_overdriveGain").floatValue = gain;
             serialized.ApplyModifiedPropertiesWithoutUndo();
+            AssignIcon(skill);
             AssetDatabase.CreateAsset(skill, path);
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
             return AssetDatabase.LoadAssetAtPath<T>(path);
+        }
+
+        private static void AssignIcon(SkillDefinition skill)
+        {
+            var serialized = new SerializedObject(skill);
+            serialized.FindProperty("_icon").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Sprite>(
+                $"Assets/_Game/Art/Generated/ui/skill_{skill.Id}.png");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void EnsureFolder(string path)

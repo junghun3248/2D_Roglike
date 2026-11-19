@@ -1,4 +1,5 @@
 using UnityEngine;
+using Roglike.Data;
 
 namespace Roglike.Combat
 {
@@ -11,6 +12,13 @@ namespace Roglike.Combat
         [SerializeField] private Sprite _square;
         [SerializeField] private Sprite _circle;
         [SerializeField] private Material _material;
+        [SerializeField] private SpriteAnimationData _slashAnimation;
+        [SerializeField] private SpriteAnimationData _impactAnimation;
+        [SerializeField] private SpriteAnimationData _slamAnimation;
+
+        public static SpriteAnimationData SlashAnimation { get; private set; }
+        public static SpriteAnimationData ImpactAnimation { get; private set; }
+        public static SpriteAnimationData SlamAnimation { get; private set; }
         [Header("투사체 그림 (없으면 자리표시 도형)")]
         [SerializeField] private Sprite _gearProjectile;
         [SerializeField] private Sprite _leafProjectile;
@@ -26,6 +34,9 @@ namespace Roglike.Combat
             Square = _square;
             Circle = _circle;
             Material = _material;
+            SlashAnimation = _slashAnimation;
+            ImpactAnimation = _impactAnimation;
+            SlamAnimation = _slamAnimation;
             GearSprite = _gearProjectile;
             LeafSprite = _leafProjectile;
         }

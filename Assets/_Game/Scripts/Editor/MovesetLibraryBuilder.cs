@@ -13,6 +13,8 @@ namespace Roglike.EditorTools
         public static void Configure(PlayerCombat combat)
         {
             var serialized = new SerializedObject(combat);
+            serialized.FindProperty("_slash").objectReferenceValue = EnsureNormalSlash("Attack1", false);
+            serialized.FindProperty("_airSlash").objectReferenceValue = EnsureNormalSlash("Air1", true);
             serialized.FindProperty("_heavy").objectReferenceValue = Ensure("Heavy1", 1.8f, a => Heavy(a, false));
             serialized.FindProperty("_dashAttack").objectReferenceValue = Ensure("DashAttack", 1.6f, a =>
             {
@@ -55,6 +57,30 @@ namespace Roglike.EditorTools
             attack.hitboxSize = new Vector2(2.8f, 1.8f); attack.hitboxOffset = new Vector2(1.2f, 0.1f);
             attack.hitStun = 0.4f; attack.hitStop = finisher ? 0.11f : 0.09f;
             attack.shake = finisher ? 0.5f : 0.35f; attack.isFinisher = finisher;
+        }
+
+        internal static AttackData EnsureNormalSlash(string name, bool airborne)
+        {
+            string path = $"{Folder}/{name}.asset";
+            var attack = AssetDatabase.LoadAssetAtPath<AttackData>(path);
+            bool created = attack == null;
+            if (created) attack = ScriptableObject.CreateInstance<AttackData>();
+            attack.damageMultiplier = 1f;
+            attack.startup = 0.04f; attack.active = 0.08f; attack.recovery = 0.15f;
+            attack.cancelTime = 0.27f;
+            attack.lungeSpeed = airborne ? 0f : 5f;
+            attack.knockback = new Vector2(6f, 2f); attack.hitStun = 0.3f;
+            attack.hitStop = airborne ? 0.06f : 0.075f;
+            attack.shake = airborne ? 0.18f : 0.22f;
+            attack.overdriveGain = 5f; attack.slashAngle = -15f;
+            attack.isFinisher = false;
+            attack.hitboxOffset = new Vector2(1f, 0.1f);
+            attack.hitboxSize = new Vector2(2f, airborne ? 1.8f : 1.3f);
+            Motion(attack, Vector2.zero);
+            if (created) AssetDatabase.CreateAsset(attack, path);
+            EditorUtility.SetDirty(attack);
+            AssetDatabase.SaveAssets();
+            return attack;
         }
 
         private static void Motion(AttackData attack, Vector2 velocity, bool keepMomentum = false, bool movingHits = false)

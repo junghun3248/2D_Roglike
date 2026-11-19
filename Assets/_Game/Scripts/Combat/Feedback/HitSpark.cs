@@ -15,13 +15,15 @@ namespace Roglike.Combat
         private Color _color;
 
         /// <summary>파편 묶음 생성. 적 처치 폭발에도 같은 함수를 쓴다 (count·speed를 키워서).</summary>
-        public static void Spawn(Vector2 point, Color color, int count = 7, float speed = 9f, float size = 0.22f)
+        public static void Spawn(Vector2 point, Color color, int count = 7, float speed = 9f, float size = 0.22f,
+            Vector2 direction = default, float spread = 0.65f)
         {
             for (int i = 0; i < count; i++)
             {
                 var renderer = VfxSprites.CreateRenderer("HitSpark", VfxSprites.Square, color, 50);
                 var spark = renderer.gameObject.AddComponent<HitSpark>();
                 float angle = Random.Range(0f, Mathf.PI * 2f);
+                if (direction != Vector2.zero) angle = Mathf.Atan2(direction.y, direction.x) + Random.Range(-spread, spread);
                 float s = speed * Random.Range(0.5f, 1.2f);
                 spark._velocity = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * s;
                 spark._life = Random.Range(0.18f, 0.32f);

@@ -39,7 +39,13 @@ namespace Roglike.EditorTools
             var settings = new TextureImporterSettings();
             importer.ReadTextureSettings(settings);
             settings.spriteMeshType = SpriteMeshType.FullRect;
-            if (isFrame)
+            if (assetPath.Replace('\\', '/').StartsWith(Folder + "ui/")
+                || assetPath.Replace('\\', '/').StartsWith(Folder + "vfx/"))
+            {
+                settings.spriteAlignment = (int)SpriteAlignment.Center;
+                settings.spritePivot = Vector2.one * 0.5f;
+            }
+            else if (isFrame)
             {
                 settings.spriteAlignment = (int)SpriteAlignment.Custom;
                 settings.spritePivot = new Vector2(0.5f, 0f);

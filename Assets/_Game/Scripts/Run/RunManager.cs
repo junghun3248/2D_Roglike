@@ -127,7 +127,7 @@ namespace Roglike.Run
             _rerollsLeft = Mathf.Max(0, Mathf.RoundToInt(_player.Get(StatType.Rerolls)));
             _synergy = new SynergyTracker(_player, _synergies ?? Array.Empty<SynergyData>());
             _synergyPanel?.Bind(_synergy);
-            _upgradeChoice?.SetTagStyle(TagStyle);
+            _upgradeChoice?.SetTagStyle(TagStyle, tag => _synergy.Get(tag)?.Icon);
 
             foreach (Room room in _rooms) room.Entered += OnRoomEntered;
             _loop = StartCoroutine(RunLoop());

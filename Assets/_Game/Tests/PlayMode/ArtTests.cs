@@ -89,13 +89,14 @@ namespace Roglike.Tests
             var renderer = enemy.GetComponentInChildren<SpriteRenderer>();
             Assert.IsNotNull(renderer.sprite);
             Assert.IsNotNull(enemy.GetComponent<HitFlash>());
+            Color originalColor = renderer.color;
             enemy.TryApplyDamage(new DamageInfo(1, false, enemy.transform.position, Vector2.zero, 0.1f, null));
             var block = new MaterialPropertyBlock();
             renderer.GetPropertyBlock(block);
             if (renderer.sharedMaterial.HasProperty("_FlashAmount"))
-                Assert.Greater(block.GetFloat("_FlashAmount"), 0f);
+                Assert.That(block.GetFloat("_FlashAmount"), Is.EqualTo(0.85f).Within(0.001f));
             else
-                Assert.AreEqual(Color.white, renderer.color);
+                Assert.AreEqual(Color.Lerp(originalColor, Color.white, 0.85f), renderer.color);
             yield return null;
         }
 

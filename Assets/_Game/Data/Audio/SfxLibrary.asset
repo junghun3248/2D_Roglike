@@ -1,0 +1,39 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 0c6f72a9a81048e5a33d76900e76f1a5, type: 3}
+  m_Name: SfxLibrary
+  m_EditorClassIdentifier: 
+  _entries:
+  - _id: swing
+    _clip: {fileID: 8300000, guid: 51e63a7133204529bbb881d7e1fc2436, type: 3}
+    _volume: 0.3
+  - _id: hit
+    _clip: {fileID: 8300000, guid: aa0bac2fd06d4392847de11352f02aef, type: 3}
+    _volume: 0.9
+  - _id: hit_crit
+    _clip: {fileID: 8300000, guid: d4d3ab60da4446fc9f29360032b0bcaa, type: 3}
+    _volume: 0.95
+  - _id: kill
+    _clip: {fileID: 8300000, guid: 40db964600b445dc983a60539ba4445e, type: 3}
+    _volume: 0.9
+  - _id: dash
+    _clip: {fileID: 8300000, guid: 9aecfadd2e984f0886254b9a97f70509, type: 3}
+    _volume: 0.5
+  - _id: jump
+    _clip: {fileID: 8300000, guid: 66b63d956d884011873029a5d106b1a4, type: 3}
+    _volume: 0.4
+  - _id: land
+    _clip: {fileID: 8300000, guid: 6dc18c861fc04ff2a33df90842646209, type: 3}
+    _volume: 0.3
+  - _id: player_hurt
+    _clip: {fileID: 8300000, guid: 1bd1a3438d5f413d8c7ecac3fcb959ae, type: 3}
+    _volume: 0.8

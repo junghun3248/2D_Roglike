@@ -12,6 +12,7 @@ namespace Roglike.UI
         [SerializeField] private Health _playerHealth;
         [SerializeField] private OverdriveController _overdrive;
         [SerializeField] private Sprite _circleSprite;
+        [SerializeField] private Sprite _portraitSprite;
         [SerializeField] private float _trailSpeed = 1.2f;
         [SerializeField] private float _trailDelay = 0.2f;
         [SerializeField] private float _hitFlashDuration = 0.25f;
@@ -48,6 +49,11 @@ namespace Roglike.UI
             _portrait.rectTransform.sizeDelta = _portraitZoom;
             _portrait.rectTransform.anchoredPosition = _portraitOffset;
             _portrait.preserveAspect = true;
+            if (_portraitSprite != null)
+            {
+                _portrait.sprite = _portraitSprite;
+                UiFactory.Stretch(_portrait.rectTransform);
+            }
             _healthBar = Bar("Health", new Vector2(140f, 142f), new Vector2(360f, 28f), UiTheme.HealthBack);
             _trail = UiFactory.CreateImage("Trail", _healthBar, Color.white).rectTransform;
             UiFactory.Stretch(_trail);
@@ -70,7 +76,7 @@ namespace Roglike.UI
                 _player = _playerHealth.GetComponent<PlayerController>();
                 _playerBody = _playerHealth.GetComponent<Rigidbody2D>();
                 _body = _player != null ? _player.BodyRenderer : null;
-                if (_body != null) _portrait.sprite = _body.sprite;
+                if (_portraitSprite == null && _body != null) _portrait.sprite = _body.sprite;
             }
             if (GetComponent<PauseMenuUI>() == null) gameObject.AddComponent<PauseMenuUI>();
             if (GetComponent<HudFeedbackUI>() == null) gameObject.AddComponent<HudFeedbackUI>().Bind(_playerHealth);
@@ -92,7 +98,7 @@ namespace Roglike.UI
         private void LateUpdate()
         {
             // 공격·달리기 프레임이 초상화에서 튀지 않도록 마지막 대기 프레임을 유지한다.
-            if (_body != null && _body.sprite != null && _player.IsGrounded && !_player.IsAttacking
+            if (_portraitSprite == null && _body != null && _body.sprite != null && _player.IsGrounded && !_player.IsAttacking
                 && !_player.IsInSkill && !_player.IsDashing && !_player.IsHurt && !_player.IsCharging
                 && (_playerBody == null || Mathf.Abs(_playerBody.linearVelocity.x) < 0.05f))
                 _portrait.sprite = _body.sprite;

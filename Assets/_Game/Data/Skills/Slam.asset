@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 054d81d2854e60943bbf78c24754e2e7, type: 3}
   m_Name: Slam
   m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.SlamSkill
+  _icon: {fileID: 21300000, guid: 0df9f8d1473858018a8d3f1484dc95e1, type: 3}
   _id: Slam
   _displayName: "\uB0B4\uB824\uCC0D\uAE30"
   _shortName: "\uAC15\uD0C0"

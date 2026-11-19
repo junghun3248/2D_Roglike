@@ -85,6 +85,39 @@ namespace Roglike.Tests
         }
 
         [UnityTest]
+        public IEnumerator GroundSwings_UseCrescentAndAlternateVerticalFlip()
+        {
+            Assert.IsNotNull(VfxSprites.SlashAnimation, "Rebuild scenes with the VFX builder first.");
+            Press(Key.X);
+            SlashEffect first = null;
+            float deadline = Time.realtimeSinceStartup + 1f;
+            while (first == null && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+                first = Object.FindFirstObjectByType<SlashEffect>();
+            }
+            Assert.IsNotNull(first);
+            var renderer = first.GetComponent<SpriteRenderer>();
+            CollectionAssert.Contains(VfxSprites.SlashAnimation.frames, renderer.sprite);
+            Assert.AreNotSame(VfxSprites.Square, renderer.sprite);
+            Assert.IsFalse(renderer.flipY);
+            Assert.AreEqual(_player.Facing < 0f, renderer.flipX);
+            SlashEffect second = null;
+            deadline = Time.realtimeSinceStartup + 1f;
+            while (second == null && Time.realtimeSinceStartup < deadline)
+            {
+                yield return null;
+                var candidate = Object.FindFirstObjectByType<SlashEffect>();
+                if (candidate != null && candidate != first) second = candidate;
+            }
+            Release();
+            Assert.IsNotNull(second);
+            renderer = second.GetComponent<SpriteRenderer>();
+            CollectionAssert.Contains(VfxSprites.SlashAnimation.frames, renderer.sprite);
+            Assert.IsTrue(renderer.flipY, "The alternating upward swing must mirror the crescent vertically.");
+        }
+
+        [UnityTest]
         public IEnumerator HoldingX_RepeatsSameSlashWhileAirborne()
         {
             int airborneSwings = 0;
@@ -99,7 +132,7 @@ namespace Roglike.Tests
             Press(Key.Z, Key.X);
             yield return new WaitForSecondsRealtime(0.6f);
             Release();
-            Assert.GreaterOrEqual(airborneSwings, 2);
+            Assert.That(airborneSwings, Is.InRange(2, 3));
         }
 
         [UnityTest]
@@ -344,6 +377,218 @@ namespace Roglike.Tests
             yield return new WaitForSecondsRealtime(0.05f);
             Release();
             yield return new WaitForSecondsRealtime(0.5f);
+        }
+
+        [UnityTest]
+        public IEnumerator AirWhiffs_LandWithinNormalJumpTime()
+        {
+            Press(Key.Z);
+            yield return new WaitForSecondsRealtime(0.12f);
+            Assert.IsFalse(_player.IsGrounded);
+            Press(Key.Z, Key.X);
+            float deadline = Time.unscaledTime + 0.8f;
+            while (!_player.IsGrounded && Time.unscaledTime < deadline) yield return null;
+            Assert.IsTrue(_player.IsGrounded, "Repeated whiffs must not extend a normal jump.");
+        }
+
+        [UnityTest]
+        public IEnumerator AirSwings_AllowHorizontalSteering()
+        {
+            Press(Key.Z);
+            yield return new WaitForSecondsRealtime(0.12f);
+            float startX = _player.transform.position.x;
+            Press(Key.Z, Key.RightArrow, Key.X);
+            yield return new WaitForSecondsRealtime(0.2f);
+            Assert.IsFalse(_player.IsGrounded);
+            Assert.Greater(_player.transform.position.x - startX, 0.8f);
+        }
+
+        [UnityTest]
+        public IEnumerator GroundHit_RequestsOneSoundAndHitStopForTargetGroup()
+        {
+            PlaceSlime(0, new Vector2(1.2f, -0.35f));
+            PlaceSlime(1, new Vector2(1.4f, -0.35f));
+            Assert.IsNotNull(SfxPlayer.Instance);
+            int sounds = 0;
+            Action<string> listener = id => { if (id == "hit") sounds++; };
+            SfxPlayer.Instance.SoundRequested += listener;
+            bool stopped = false;
+            try
+            {
+                Press(Key.X);
+                yield return null;
+                yield return null;
+                Release();
+                float deadline = Time.unscaledTime + 0.4f;
+                while (Time.unscaledTime < deadline)
+                {
+                    stopped |= TimeController.Instance.IsHitStopped;
+                    yield return null;
+                }
+                Assert.IsTrue(stopped);
+                Assert.AreEqual(1, sounds);
+            }
+            finally { SfxPlayer.Instance.SoundRequested -= listener; }
+        }
+
+        [UnityTest]
+        public IEnumerator Whiff_OnlyRequestsSwingSoundWithoutHitStop()
+        {
+            Assert.IsNotNull(SfxPlayer.Instance);
+            int swings = 0;
+            int hits = 0;
+            Action<string> listener = id =>
+            {
+                if (id == "swing") swings++;
+                if (id == "hit" || id == "hit_crit" || id == "kill") hits++;
+            };
+            SfxPlayer.Instance.SoundRequested += listener;
+            try
+            {
+                Press(Key.X);
+                yield return null;
+                yield return null;
+                Release();
+                float deadline = Time.unscaledTime + 0.4f;
+                while (Time.unscaledTime < deadline)
+                {
+                    Assert.IsFalse(TimeController.Instance.IsHitStopped);
+                    yield return null;
+                }
+                Assert.AreEqual(1, swings);
+                Assert.AreEqual(0, hits);
+            }
+            finally { SfxPlayer.Instance.SoundRequested -= listener; }
+        }
+
+        [UnityTest]
+        public IEnumerator HoldingX_CameraRemainsWithinPointSixOfAverage()
+        {
+            Health target = PlaceSlime(0, new Vector2(1.3f, -0.35f));
+            Listen(target);
+            yield return new WaitForSecondsRealtime(0.5f);
+            var samples = new System.Collections.Generic.List<float>();
+            Press(Key.X);
+            float deadline = Time.unscaledTime + 1.2f;
+            while (Time.unscaledTime < deadline)
+            {
+                yield return null;
+                samples.Add(GameCamera.Instance.transform.position.x);
+            }
+            Release();
+            Assert.GreaterOrEqual(_hitCount, 2, "Must exercise repeated recoil and hit impulses.");
+            float average = 0f;
+            foreach (float x in samples) average += x;
+            average /= samples.Count;
+            foreach (float x in samples)
+                Assert.That(Mathf.Abs(x - average), Is.LessThanOrEqualTo(0.6f));
+        }
+
+        [UnityTest]
+        public IEnumerator PunchZoom_ReturnsWithinPointFifteenSeconds()
+        {
+            var camera = GameCamera.Instance.GetComponent<Camera>();
+            float original = camera.orthographicSize;
+            GameCamera.Instance.PunchZoom(_player.transform.position, 0.94f, 0.08f);
+            yield return new WaitForSecondsRealtime(0.06f);
+            Assert.Less(camera.orthographicSize, original);
+            yield return new WaitForSecondsRealtime(0.18f);
+            Assert.That(camera.orthographicSize, Is.EqualTo(original).Within(0.001f));
+        }
+
+        [UnityTest]
+        public IEnumerator HitFlash_FadesDuringHitStop_AndRestoresTintPriority()
+        {
+            var target = new GameObject("FlashCurveTest");
+            var renderer = target.AddComponent<SpriteRenderer>();
+            renderer.color = Color.gray;
+            var health = target.AddComponent<Health>();
+            var flash = target.AddComponent<HitFlash>();
+            try
+            {
+                flash.SetStatusTint(Color.green, 0.5f);
+                flash.SetBaseColor(renderer, Color.red);
+                var damage = new DamageInfo(1, false, Vector2.zero, Vector2.zero, 0f, null);
+                health.TryApplyDamage(damage);
+                Assert.That(renderer.color.g, Is.EqualTo(0.85f).Within(0.001f));
+                TimeController.Instance.HitStop(0.3f);
+                yield return new WaitForSecondsRealtime(0.055f);
+                Assert.That(renderer.color.g, Is.InRange(0.01f, 0.7f));
+                health.TryApplyDamage(damage);
+                Assert.That(renderer.color.g, Is.EqualTo(0.85f).Within(0.001f));
+                yield return new WaitForSecondsRealtime(0.11f);
+                Assert.IsTrue(TimeController.Instance.IsHitStopped);
+                Assert.AreEqual(Color.red, renderer.color);
+                flash.SetBaseColor(renderer, Color.gray);
+                Assert.AreEqual(Color.Lerp(Color.gray, Color.green, 0.5f), renderer.color);
+            }
+            finally { Object.Destroy(target); }
+        }
+
+        [UnityTest]
+        public IEnumerator HitFlash_ShaderFadesDuringHitStop_AndRestoresTelegraph()
+        {
+            var target = new GameObject("ShaderFlashCurveTest");
+            var renderer = target.AddComponent<SpriteRenderer>();
+            var material = new Material(Shader.Find("Roglike/SpriteFlash"));
+            renderer.sharedMaterial = material;
+            var health = target.AddComponent<Health>();
+            var flash = target.AddComponent<HitFlash>();
+            var block = new MaterialPropertyBlock();
+            try
+            {
+                flash.SetStatusTint(Color.green, 0.5f);
+                flash.SetBaseColor(renderer, Color.red);
+                renderer.GetPropertyBlock(block);
+                float telegraphAmount = block.GetFloat("_FlashAmount");
+                health.TryApplyDamage(new DamageInfo(1, false, Vector2.zero, Vector2.zero, 0f, null));
+                renderer.GetPropertyBlock(block);
+                Assert.That(block.GetFloat("_FlashAmount"), Is.EqualTo(0.85f).Within(0.001f));
+                TimeController.Instance.HitStop(0.3f);
+                yield return new WaitForSecondsRealtime(0.055f);
+                renderer.GetPropertyBlock(block);
+                Assert.Less(block.GetFloat("_FlashAmount"), 0.85f);
+                yield return new WaitForSecondsRealtime(0.06f);
+                renderer.GetPropertyBlock(block);
+                Assert.IsTrue(TimeController.Instance.IsHitStopped);
+                Assert.AreEqual(Color.red, block.GetColor("_FlashColor"));
+                Assert.That(block.GetFloat("_FlashAmount"), Is.EqualTo(telegraphAmount).Within(0.001f));
+            }
+            finally
+            {
+                Object.Destroy(target);
+                Object.Destroy(material);
+            }
+        }
+
+        [UnityTest]
+        public IEnumerator Camera_SmallReverseStepsDoNotFlip_ButSustainedTravelDoes()
+        {
+            var target = new GameObject("CameraFollowTest");
+            GameCamera camera = GameCamera.Instance;
+            camera.SetTarget(target.transform);
+            try
+            {
+                for (int step = 0; step < 6; step++)
+                {
+                    target.transform.position = new Vector3(step % 2 == 0 ? -0.4f : 0f, 0f, 0f);
+                    yield return null;
+                    yield return null;
+                    Assert.AreEqual(1f, ReadField(camera, "_lookDirection"));
+                }
+                float deadline = Time.unscaledTime + 0.3f;
+                while (Time.unscaledTime < deadline)
+                {
+                    target.transform.position += Vector3.left * (4f * Time.unscaledDeltaTime);
+                    yield return null;
+                }
+                Assert.AreEqual(-1f, ReadField(camera, "_lookDirection"));
+            }
+            finally
+            {
+                camera.SetTarget(_player.transform);
+                Object.Destroy(target);
+            }
         }
 
         private void Listen(Health target, bool airborneOnly = false)

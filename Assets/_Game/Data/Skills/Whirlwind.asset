@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 8bc009a2236d47c47b33cc7a954db72a, type: 3}
   m_Name: Whirlwind
   m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.WhirlwindSkill
+  _icon: {fileID: 21300000, guid: 4e2196f88f1d562188fce1fccdabc94d, type: 3}
   _id: Whirlwind
   _displayName: "\uD68C\uC804 \uBCA0\uAE30"
   _shortName: "\uD68C\uC804"

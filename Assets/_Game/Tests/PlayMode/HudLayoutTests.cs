@@ -107,6 +107,21 @@ namespace Roglike.Tests
         [UnityTest]
         public IEnumerator SkillCooldownUsesRadialSweep()
         {
+            var hud = Object.FindFirstObjectByType<HudController>();
+            var skills = Object.FindFirstObjectByType<PlayerSkills>();
+            var skillSlots = hud.Cluster.Find("SkillSlots");
+            for (int i = 0; i < skills.Slots.Count; i++)
+            {
+                if (skills.Slots[i] == null) continue;
+                Image icon = skillSlots.GetChild(i).Find("Background/Icon").GetComponent<Image>();
+                Assert.IsNotNull(icon.sprite);
+                Assert.AreSame(skills.Slots[i].Icon, icon.sprite);
+                Assert.IsTrue(icon.enabled);
+            }
+            Image portrait = hud.Cluster.Find("Portrait/PortraitMask/Hero").GetComponent<Image>();
+            Assert.IsNotNull(portrait.sprite);
+            Assert.AreEqual("portrait_hero", portrait.sprite.name);
+            Assert.IsNotNull(portrait.GetComponentInParent<Mask>());
             yield return Tap(Key.A);
             yield return new WaitForSecondsRealtime(0.2f);
             var slots = Object.FindFirstObjectByType<HudController>().Cluster.Find("SkillSlots");

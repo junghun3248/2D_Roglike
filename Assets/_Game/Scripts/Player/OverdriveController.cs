@@ -104,6 +104,7 @@ namespace Roglike.Player
         private void Activate()
         {
             IsActive = true;
+            SfxPlayer.Instance?.SetOverdrive(true);
             _gauge = 0f;
             _activeDuration = Duration;
             _remaining = _activeDuration;
@@ -119,6 +120,7 @@ namespace Roglike.Player
         private void Deactivate()
         {
             IsActive = false;
+            SfxPlayer.Instance?.SetOverdrive(false);
             _remaining = 0f;
             TimeController.Instance?.SetOverdriveScale(1f);
             GameCamera.Instance?.SetSizeMultiplier(1f);

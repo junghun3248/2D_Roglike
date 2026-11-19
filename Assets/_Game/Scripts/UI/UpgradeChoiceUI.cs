@@ -18,6 +18,7 @@ namespace Roglike.UI
         private readonly List<UpgradeData> _options = new List<UpgradeData>(3);
         private readonly RectTransform[] _cards = new RectTransform[3];
         private readonly Image[] _frames = new Image[3];
+        private readonly Image[] _icons = new Image[3];
         private readonly Text[] _rarities = new Text[3];
         private readonly Text[] _names = new Text[3];
         private readonly Text[] _tags = new Text[3];
@@ -31,6 +32,7 @@ namespace Roglike.UI
         private Func<UpgradeData, int> _stacks;
         private Func<IReadOnlyList<UpgradeData>> _reroll;
         private Func<UpgradeTag, (string name, Color color)> _tagStyle;
+        private Func<UpgradeTag, Sprite> _tagIcon;
         private Text _hint;
         private int _selected;
         private float _shownAt;
@@ -86,9 +88,10 @@ namespace Roglike.UI
             _actions.Enable();
         }
 
-        public void SetTagStyle(Func<UpgradeTag, (string name, Color color)> style)
+        public void SetTagStyle(Func<UpgradeTag, (string name, Color color)> style, Func<UpgradeTag, Sprite> icon = null)
         {
             _tagStyle = style;
+            _tagIcon = icon;
             if (!IsOpen) return;
             for (int i = 0; i < _options.Count; i++) RefreshTags(i, _options[i]);
         }
@@ -147,6 +150,8 @@ namespace Roglike.UI
 
         private void RefreshTags(int index, UpgradeData upgrade)
         {
+            _icons[index].sprite = upgrade.tags != null && upgrade.tags.Length > 0 ? _tagIcon?.Invoke(upgrade.tags[0]) : null;
+            _icons[index].enabled = _icons[index].sprite != null;
             Transform root = _tags[index].transform;
             foreach (Transform child in root)
             {
@@ -162,6 +167,16 @@ namespace Roglike.UI
                 var chip = UiFactory.CreatePanel(root, new Vector2(width - 6f, 30f), "TagChip", style.color);
                 chip.anchoredPosition = new Vector2((i - (upgrade.tags.Length - 1) * 0.5f) * width, 0f);
                 var label = UiFactory.Label("Tag", chip, style.name, 18, Vector2.zero, new Vector2(width - 10f, 26f), style.color);
+                Sprite sprite = _tagIcon?.Invoke(tag);
+                if (sprite != null)
+                {
+                    Image icon = UiFactory.CreateIcon("Icon", chip, sprite, style.color);
+                    icon.rectTransform.anchorMin = icon.rectTransform.anchorMax = new Vector2(0f, 0.5f);
+                    icon.rectTransform.anchoredPosition = new Vector2(UiTheme.TagIconInset + UiTheme.TagIconSize * 0.5f, 0f);
+                    icon.rectTransform.sizeDelta = Vector2.one * UiTheme.TagIconSize;
+                    label.rectTransform.anchoredPosition = Vector2.right * (UiTheme.TagIconSize * 0.5f);
+                    label.rectTransform.sizeDelta -= Vector2.right * UiTheme.TagIconSize;
+                }
                 label.resizeTextForBestFit = true;
                 label.resizeTextMinSize = 12;
                 label.resizeTextMaxSize = 18;
@@ -182,7 +197,7 @@ namespace Roglike.UI
 
         private void BuildCard(int index, Transform parent)
         {
-            RectTransform card = UiFactory.CreatePanel(parent, new Vector2(420f, 520f), $"Card{index + 1}");
+            RectTransform card = UiFactory.CreatePanel(parent, new Vector2(420f, 520f), $"Card{index + 1}", background: UiTheme.CardBackground);
             _cards[index] = card;
             _frames[index] = card.GetComponent<Image>();
             var glow = card.gameObject.AddComponent<Outline>();
@@ -190,14 +205,17 @@ namespace Roglike.UI
             glow.effectDistance = new Vector2(4f, -4f);
             glow.effectColor = new Color(1f, 0.8f, 0.3f, 0.2f);
             _rarities[index] = CreateLabel("Rarity", card, "", 26, Color.white,
-                new Vector2(0f, 207f), new Vector2(360f, 42f));
+                new Vector2(0f, UiTheme.CardRarityY), new Vector2(360f, 42f));
+            _icons[index] = UiFactory.CreateIcon("UpgradeIcon", card, null, Color.white);
+            _icons[index].rectTransform.anchoredPosition = Vector2.up * UiTheme.CardIconY;
+            _icons[index].rectTransform.sizeDelta = Vector2.one * UiTheme.CardIconSize;
             _names[index] = CreateLabel("Name", card, "", 38, Color.white,
-                new Vector2(0f, 130f), new Vector2(364f, 100f));
+                new Vector2(0f, UiTheme.CardNameY), new Vector2(364f, UiTheme.CardNameHeight));
             _tags[index] = CreateLabel("Tags", card, "", 22, Color.white,
-                new Vector2(0f, 65f), new Vector2(364f, 36f));
+                new Vector2(0f, UiTheme.CardTagsY), new Vector2(364f, 36f));
             _tags[index].supportRichText = true;
             _descriptions[index] = CreateLabel("Description", card, "", 27, Color.white,
-                new Vector2(0f, -40f), new Vector2(364f, 160f));
+                new Vector2(0f, UiTheme.CardBodyY), new Vector2(364f, 160f));
             _stackTexts[index] = CreateLabel("Stacks", card, "", 24, new Color(0.8f, 0.83f, 0.9f),
                 new Vector2(0f, -160f), new Vector2(364f, 42f));
             var badge = UiFactory.CreatePanel(card, new Vector2(60f, 42f), "KeyBadge");

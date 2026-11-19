@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: a7efed9581cd9a94b872065364c6b8b0, type: 3}
   m_Name: DashSlash
   m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.DashSlashSkill
+  _icon: {fileID: 21300000, guid: 6853c488e68e5d87a857ba558c542c61, type: 3}
   _id: DashSlash
   _displayName: "\uB3CC\uC9C4 \uBCA0\uAE30"
   _shortName: "\uB3CC\uC9C4"

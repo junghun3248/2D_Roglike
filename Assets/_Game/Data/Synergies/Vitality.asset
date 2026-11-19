@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: e28b766d95f181547bfb4ace3856728e, type: 3}
   m_Name: Vitality
   m_EditorClassIdentifier: Roglike::Roglike.Data.SynergyData
+  _icon: {fileID: 21300000, guid: c6d14c81825c5bb3918491f38899e0da, type: 3}
   tag: 5
   displayName: "\uC0DD\uC874"
   color: {r: 1, g: 0.45, b: 0.7, a: 1}

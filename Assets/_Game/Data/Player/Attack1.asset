@@ -13,17 +13,23 @@ MonoBehaviour:
   m_Name: Attack1
   m_EditorClassIdentifier: Assembly-CSharp::Roglike.Data.AttackData
   damageMultiplier: 1
-  hitStun: 0.25
-  knockback: {x: 4, y: 1.5}
+  hitStun: 0.3
+  knockback: {x: 6, y: 2}
   hitboxOffset: {x: 1, y: 0.1}
   hitboxSize: {x: 2, y: 1.3}
-  startup: 0.05
+  startup: 0.04
   active: 0.08
-  recovery: 0.14
-  cancelTime: 0.13
+  recovery: 0.15
+  cancelTime: 0.27
   lungeSpeed: 5
-  hitStop: 0.05
-  shake: 0.15
+  _selfVelocity: {x: 0, y: 0}
+  _keepMomentum: 0
+  _hitsWhileMoving: 0
+  _landingHitboxSize: {x: 3, y: 1.2}
+  _landingHitboxOffset: {x: 0, y: -0.4}
+  _motionTimeout: 2
+  hitStop: 0.075
+  shake: 0.22
   isFinisher: 0
   slashAngle: -15
   overdriveGain: 5

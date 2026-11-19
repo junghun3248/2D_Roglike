@@ -1,3 +1,4 @@
+using Roglike.Data;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -71,7 +72,7 @@ namespace Roglike.UI
 
         public static void SetCircle(Sprite sprite) { if (sprite != null) _circle = sprite; }
 
-        public static RectTransform CreatePanel(Transform parent, Vector2 size, string name = "Panel", Color? border = null)
+        public static RectTransform CreatePanel(Transform parent, Vector2 size, string name = "Panel", Color? border = null, Color? background = null)
         {
             RectTransform panel = CreateRect(name, parent, Vector2.one * 0.5f, Vector2.one * 0.5f, Vector2.zero, size);
             Image frame = panel.gameObject.AddComponent<Image>();
@@ -87,7 +88,7 @@ namespace Roglike.UI
             Stretch(shadow.rectTransform);
             shadow.rectTransform.offsetMin = Vector2.one * UiTheme.Border;
             shadow.rectTransform.offsetMax = -Vector2.one * UiTheme.Border;
-            Image fill = CreateImage("PanelFill", panel, UiTheme.Panel);
+            Image fill = CreateImage("PanelFill", panel, background ?? UiTheme.Panel);
             Stretch(fill.rectTransform);
             fill.rectTransform.offsetMin = new Vector2(4f, 4f);
             fill.rectTransform.offsetMax = new Vector2(-4f, -6f);
@@ -109,6 +110,31 @@ namespace Roglike.UI
             image.fillClockwise = true;
             Stretch(image.rectTransform);
             return image;
+        }
+
+        public static Image CreateIcon(string name, Transform parent, Sprite sprite, Color fallback)
+        {
+            Image image = CreateImage(name, parent, sprite != null ? Color.white : fallback);
+            image.sprite = sprite;
+            image.preserveAspect = true;
+            return image;
+        }
+
+        public static RectTransform CreateTraitPlate(Transform parent, SynergyData data, bool active)
+        {
+            Image rim = CreateImage("TraitPlate", parent, active ? data.color : UiTheme.Muted);
+            rim.sprite = RoundedSquare;
+            rim.type = Image.Type.Sliced;
+            rim.rectTransform.sizeDelta = Vector2.one * UiTheme.TraitPlateSize;
+            Image fill = CreateImage("PlateFill", rim.transform, UiTheme.BadgeBackground);
+            fill.sprite = RoundedSquare;
+            fill.type = Image.Type.Sliced;
+            Stretch(fill.rectTransform);
+            fill.rectTransform.offsetMin = Vector2.one * UiTheme.Border;
+            fill.rectTransform.offsetMax = -Vector2.one * UiTheme.Border;
+            Image icon = CreateIcon("Icon", rim.transform, data.Icon, data.color);
+            icon.rectTransform.sizeDelta = Vector2.one * UiTheme.TraitIconSize;
+            return rim.rectTransform;
         }
 
         public static Text Label(string name, Transform parent, string value, int size, Vector2 position, Vector2 dimensions, Color? color = null)

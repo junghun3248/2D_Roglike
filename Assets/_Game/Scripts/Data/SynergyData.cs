@@ -14,6 +14,9 @@ namespace Roglike.Data
     [CreateAssetMenu(menuName = "Roglike/Synergy Data", fileName = "Synergy")]
     public class SynergyData : ScriptableObject
     {
+        [SerializeField] private Sprite _icon;
+        public Sprite Icon => _icon;
+
         public UpgradeTag tag;
         public string displayName;
         public Color color = Color.white;

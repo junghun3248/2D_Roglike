@@ -17,6 +17,13 @@ namespace Roglike.Player
     {
         [Header("Attacks")]
         [SerializeField] private AttackData _slash;
+        [SerializeField] private AttackData _airSlash;
+        [SerializeField] private float _alternateWindow = 0.45f;
+        [SerializeField] private float _slashVfxScale = 1.25f;
+        [SerializeField] private float _specialSlashVfxScale = 1.1f;
+        private float _sinceNormalSwing = float.PositiveInfinity;
+        private bool _upwardSwing;
+        private bool _normalSwing;
         [SerializeField] private AttackData _heavy;
         [SerializeField] private float _chargedLungeDistance = 4f;
         [SerializeField] private float _chargedLungeDuration = 0.12f;
@@ -70,6 +77,7 @@ namespace Roglike.Player
             }
 
             float dt = Time.deltaTime * TimeController.PlayerTimeMultiplier;
+            _sinceNormalSwing += dt;
 
             if (_input.AttackPressed)
             {
@@ -136,7 +144,7 @@ namespace Roglike.Player
             {
                 if (!_controller.IsGrounded && _input.MoveY < -_directionThreshold) StartPlunge();
                 else if (_controller.IsGrounded && _input.MoveY > _directionThreshold) StartAttack(_launcher);
-                else StartAttack(_slash);
+                else StartAttack(_controller.IsGrounded ? _slash : _airSlash);
             }
         }
 
@@ -160,7 +168,8 @@ namespace Roglike.Player
                 _feedbackPlayed = false;
                 Vector2 center = (Vector2)transform.position + _current.LandingHitboxOffset;
                 DetectHits(center, _current.LandingHitboxSize);
-                SlashEffect.Spawn(center, _current.LandingHitboxSize, 0f, _slashColor, _current.active);
+                SlashEffect.SpawnAnimation(VfxSprites.SlamAnimation, center, _current.LandingHitboxSize,
+                    0f, _slashColor, _current.active);
                 _attackTime = _current.startup + _current.active;
                 _checkedOnce = _slashSpawned = true;
                 _controller.BeginAttack(0f, _current.recovery / AttackSpeed);
@@ -203,6 +212,12 @@ namespace Roglike.Player
             if (attack == null) return;
             _controller.FaceInputDirection();
             _current = attack;
+            _normalSwing = attack == _slash || attack == _airSlash;
+            if (_normalSwing)
+            {
+                _upwardSwing = _sinceNormalSwing <= _alternateWindow && !_upwardSwing;
+                _sinceNormalSwing = 0f;
+            }
             _attackTime = 0f;
             _bufferTimer = 0f;
             _slashSpawned = false;
@@ -211,7 +226,8 @@ namespace Roglike.Player
             _hitThisSwing.Clear();
             _previousHitCenter = HitboxCenter(_current);
             _controller.BeginAttack(_current.lungeSpeed, _current.TotalDuration / AttackSpeed,
-                _current.SelfVelocity, _current.KeepMomentum);
+                _current.SelfVelocity, _current.KeepMomentum, _normalSwing);
+            SfxPlayer.Instance?.Play("swing");
             AttackStarted?.Invoke(_current.TotalDuration / AttackSpeed);
         }
 
@@ -229,10 +245,14 @@ namespace Roglike.Player
         private void SpawnSlash()
         {
             _slashSpawned = true;
-            float angle = _controller.Facing > 0f ? _current.slashAngle : -_current.slashAngle;
+            float angle = SwingAngle;
             float duration = Mathf.Max(0.08f, _current.active + 0.06f);
-            SlashEffect.Spawn(HitboxCenter(_current), _current.hitboxSize * 1.1f, angle, _slashColor, duration);
+            float scale = _normalSwing ? _slashVfxScale : _specialSlashVfxScale;
+            SlashEffect.Spawn(HitboxCenter(_current), _current.hitboxSize * scale, angle, _slashColor, duration,
+                _controller.Facing < 0f, _normalSwing && _upwardSwing);
         }
+
+        private float SwingAngle => _current.slashAngle * _controller.Facing * (_normalSwing && _upwardSwing ? -1f : 1f);
 
         private void DetectHits()
         {
@@ -264,7 +284,11 @@ namespace Roglike.Player
                 var spec = new HitSpec(_current.damageMultiplier,
                     new Vector2(_current.knockback.x * _controller.Facing, _current.knockback.y),
                     _current.hitStun, _current.hitStop, _current.shake, _current.overdriveGain, _current.isFinisher);
-                _hitResolver.TryHit(target, hit, center, spec, ref _feedbackPlayed);
+                bool firstHit = !_feedbackPlayed;
+                float angle = SwingAngle * Mathf.Deg2Rad;
+                Vector2 direction = new Vector2(Mathf.Cos(angle), Mathf.Sin(angle)) * _controller.Facing;
+                if (_hitResolver.TryHit(target, hit, center, spec, ref _feedbackPlayed, direction) && firstHit && _normalSwing)
+                    _controller.ApplyNormalHitMotion();
             }
         }
 

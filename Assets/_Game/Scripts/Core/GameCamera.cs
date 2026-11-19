@@ -17,6 +17,11 @@ namespace Roglike.Core
         [SerializeField] private float _followSharpness = 7f;
         [SerializeField] private float _lookAhead = 1.5f;
 
+        [SerializeField, Min(0f)] private float _lookFlipDistance = 1f;
+        [SerializeField, Min(0f)] private float _lookFlipTime = 0.2f;
+        [SerializeField, Min(0f)] private float _lookWalkingThreshold = 2f;
+        [SerializeField, Min(0f)] private float _lookAheadSharpness = 8f;
+
         [Header("Zoom")]
         [SerializeField] private float _baseSize = 6.5f;
         [SerializeField] private float _zoomSharpness = 6f;
@@ -38,13 +43,28 @@ namespace Roglike.Core
         private Camera _camera;
         private Vector2 _position;
         private float _trauma;
+        [SerializeField] private float _impulseDecay = 22f;
+        [SerializeField] private float _maxImpulse = 0.35f;
+        private Vector2 _impulse;
+
+        public void Impulse(Vector2 displacement)
+        {
+            _impulse = Vector2.ClampMagnitude(_impulse + displacement, _maxImpulse);
+        }
         private float _sizeMultiplier = 1f;
         private float _punchSize;
         private float _punchUntil;
+        [SerializeField, Min(0.01f)] private float _punchReturnDuration = 0.12f;
+        private bool _wasPunching;
+        private float _punchReturnStart;
+        private float _punchReturnSize;
         private Vector2 _punchFocus;
         private float _seed;
         private float _lastTargetX;
         private float _lookDirection = 1f;
+        private float _reverseTravel;
+        private float _reverseTime;
+        private float _lookOffset;
 
         private void Awake()
         {
@@ -123,7 +143,20 @@ namespace Roglike.Core
 
             float targetSize = punching ? _punchSize : _baseSize * _sizeMultiplier;
             float zoomSharpness = punching ? _punchZoomSharpness : _zoomSharpness;
-            _camera.orthographicSize = Mathf.Lerp(_camera.orthographicSize, targetSize, 1f - Mathf.Exp(-zoomSharpness * dt));
+            if (_wasPunching && !punching)
+            {
+                _punchReturnStart = _punchUntil;
+                _punchReturnSize = _camera.orthographicSize;
+            }
+            if (!punching && _punchReturnSize > 0f)
+            {
+                float progress = Mathf.Clamp01((Time.unscaledTime - _punchReturnStart) / _punchReturnDuration);
+                _camera.orthographicSize = Mathf.Lerp(_punchReturnSize, targetSize, Mathf.SmoothStep(0f, 1f, progress));
+                if (progress >= 1f) _punchReturnSize = 0f;
+            }
+            else
+                _camera.orthographicSize = Mathf.Lerp(_camera.orthographicSize, targetSize, 1f - Mathf.Exp(-zoomSharpness * dt));
+            _wasPunching = punching;
 
             float shake = _trauma * _trauma;
             float t = Time.unscaledTime * _shakeFrequency;
@@ -133,8 +166,9 @@ namespace Roglike.Core
             _trauma = Mathf.Max(0f, _trauma - _shakeDecayPerSecond * dt);
 
             transform.SetPositionAndRotation(
-                new Vector3(_position.x + offsetX, _position.y + offsetY, -10f),
+                new Vector3(_position.x + offsetX + _impulse.x, _position.y + offsetY + _impulse.y, -10f),
                 Quaternion.Euler(0f, 0f, angle));
+            _impulse *= Mathf.Exp(-_impulseDecay * dt);
         }
 
         private Vector2 DesiredFollowPosition()
@@ -146,13 +180,29 @@ namespace Roglike.Core
 
             float x = _target.position.x;
             float deltaX = x - _lastTargetX;
-            if (Mathf.Abs(deltaX) > 0.001f)
+            float dt = Time.unscaledDeltaTime;
+            if (deltaX * _lookDirection < 0f)
             {
-                _lookDirection = Mathf.Sign(deltaX);
+                _reverseTravel += Mathf.Abs(deltaX);
+                _reverseTime = dt > 0f && Mathf.Abs(deltaX) / dt >= _lookWalkingThreshold
+                    ? _reverseTime + dt : 0f;
+                if (_reverseTravel >= _lookFlipDistance || _reverseTime >= _lookFlipTime)
+                {
+                    _lookDirection = -_lookDirection;
+                    _reverseTravel = 0f;
+                    _reverseTime = 0f;
+                }
             }
+            else
+            {
+                if (deltaX * _lookDirection > 0f) _reverseTravel = 0f;
+                _reverseTime = 0f;
+            }
+            _lookOffset = Mathf.Lerp(_lookOffset, _lookDirection * _lookAhead,
+                1f - Mathf.Exp(-_lookAheadSharpness * dt));
 
             _lastTargetX = x;
-            return (Vector2)_target.position + _offset + new Vector2(_lookDirection * _lookAhead, 0f);
+            return (Vector2)_target.position + _offset + new Vector2(_lookOffset, 0f);
         }
 
         private void SnapToTarget()
@@ -164,7 +214,10 @@ namespace Roglike.Core
             }
 
             _lastTargetX = _target.position.x;
-            _position = (Vector2)_target.position + _offset;
+            _reverseTravel = 0f;
+            _reverseTime = 0f;
+            _lookOffset = _lookDirection * _lookAhead;
+            _position = (Vector2)_target.position + _offset + new Vector2(_lookOffset, 0f);
         }
     }
 }

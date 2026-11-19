@@ -40,7 +40,7 @@ namespace Roglike.Player.Skills
                 previous = current;
                 if (visualTimer <= 0f)
                 {
-                    SlashEffect.Spawn(current, _slashSize, 0f, Color, _visualDuration);
+                    SlashEffect.Spawn(current, _slashSize, 0f, Color, _visualDuration, facing < 0f);
                     Afterimage.Spawn(context.Controller.BodyRenderer, Color, _visualDuration);
                     visualTimer = _visualInterval;
                 }

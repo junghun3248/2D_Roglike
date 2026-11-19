@@ -12,24 +12,24 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b595230a4e03f24408d55a6e4ac7dfc7, type: 3}
   m_Name: Air1
   m_EditorClassIdentifier: Roglike::Roglike.Data.AttackData
-  damageMultiplier: 0.8
+  damageMultiplier: 1
   hitStun: 0.3
-  knockback: {x: 1, y: 1}
+  knockback: {x: 6, y: 2}
   hitboxOffset: {x: 1, y: 0.1}
   hitboxSize: {x: 2, y: 1.8}
-  startup: 0.025
-  active: 0.07
-  recovery: 0.12
-  cancelTime: 0.1
-  lungeSpeed: 2
+  startup: 0.04
+  active: 0.08
+  recovery: 0.15
+  cancelTime: 0.27
+  lungeSpeed: 0
   _selfVelocity: {x: 0, y: 0}
   _keepMomentum: 0
   _hitsWhileMoving: 0
   _landingHitboxSize: {x: 3, y: 1.2}
   _landingHitboxOffset: {x: 0, y: -0.4}
   _motionTimeout: 2
-  hitStop: 0.035
-  shake: 0.12
+  hitStop: 0.06
+  shake: 0.18
   isFinisher: 0
-  slashAngle: -10
-  overdriveGain: 6
+  slashAngle: -15
+  overdriveGain: 5

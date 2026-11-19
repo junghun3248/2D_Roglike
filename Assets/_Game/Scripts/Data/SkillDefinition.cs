@@ -7,6 +7,7 @@ namespace Roglike.Data
     public abstract class SkillDefinition : ScriptableObject
     {
         [SerializeField] private string _id;
+        [SerializeField] private Sprite _icon;
         [SerializeField] private string _displayName;
         [SerializeField] private string _shortName;
         [SerializeField, TextArea] private string _description;
@@ -18,6 +19,7 @@ namespace Roglike.Data
         [SerializeField] private float _overdriveGain = 6f;
 
         public string Id => _id;
+        public Sprite Icon => _icon;
         public string DisplayName => _displayName;
         public string ShortName => _shortName;
         public string Description => _description;

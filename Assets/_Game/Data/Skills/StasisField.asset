@@ -12,6 +12,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: ac69af6fb0f7de54b88abfccad10d864, type: 3}
   m_Name: StasisField
   m_EditorClassIdentifier: Roglike::Roglike.Player.Skills.StasisFieldSkill
+  _icon: {fileID: 21300000, guid: 55846e7b748e5d50b459a0d828cc0b41, type: 3}
   _id: StasisField
   _displayName: "\uC815\uC9C0 \uAD6C\uC5ED"
   _shortName: "\uC815\uC9C0"

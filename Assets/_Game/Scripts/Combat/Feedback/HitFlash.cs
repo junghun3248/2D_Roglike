@@ -12,14 +12,16 @@ namespace Roglike.Combat
         [SerializeField] private SpriteRenderer[] _renderers;
         [SerializeField] private Transform _squashTarget;
         [SerializeField] private Color _flashColor = Color.white;
-        [SerializeField] private float _flashDuration = 0.08f;
+        [SerializeField, Range(0f, 1f)] private float _flashPeak = 0.85f;
+        [SerializeField, Range(0f, 0.03f)] private float _flashHold = 0.02f;
+        [SerializeField, Range(0.001f, 0.07f)] private float _flashFade = 0.07f;
         [SerializeField] private float _squashAmount = 0.25f;
         [SerializeField] private float _squashDuration = 0.14f;
 
         private Health _health;
         private Color[] _baseColors;
         private Vector3 _baseScale;
-        private float _flashUntil;
+        private float _flashStart;
         private float _squashStart = -10f;
         private bool _squashing;
         private bool _flashing;
@@ -78,6 +80,7 @@ namespace Roglike.Combat
         private void OnDisable()
         {
             _health.Damaged -= OnDamaged;
+            _flashing = false;
             RestoreColors();
         }
 
@@ -106,7 +109,7 @@ namespace Roglike.Combat
             }
 
             _baseColors[rendererIndex] = color;
-            if (Time.unscaledTime >= _flashUntil)
+            if (!_flashing)
             {
                 ApplyTint(rendererIndex);
             }
@@ -131,30 +134,45 @@ namespace Roglike.Combat
 
         private void OnDamaged(DamageInfo info)
         {
-            _flashUntil = Time.unscaledTime + _flashDuration;
+            _flashStart = Time.unscaledTime;
             _squashStart = Time.unscaledTime;
+            _flashing = true;
+            ApplyFlash(_flashPeak);
+        }
+
+        private void ApplyFlash(float amount)
+        {
             for (int i = 0; i < _renderers.Length; i++)
             {
+                if (_renderers[i] == null) continue;
+                ApplyTint(i);
                 if (UsesFlashShader(i))
                 {
-                    // 텍스처가 있는 스프라이트는 색 곱셈으로 하얘지지 않으므로 셰이더로 덮는다.
-                    SetFlashAmount(i, 1f);
+                    _renderers[i].GetPropertyBlock(_block);
+                    float tint = _block.GetFloat(FlashAmountId) * (1f - amount);
+                    float total = tint + amount;
+                    Color color = total > 0f
+                        ? (_block.GetColor(FlashColorId) * tint + _flashColor * amount) / total
+                        : _flashColor;
+                    SetOverlay(i, color, Mathf.Min(_flashPeak, total));
                 }
                 else
-                {
-                    _renderers[i].color = _flashColor;
-                }
+                    _renderers[i].color = Color.Lerp(_renderers[i].color, _flashColor, amount);
             }
-
-            _flashing = true;
         }
 
         private void LateUpdate()
         {
-            if (Time.unscaledTime >= _flashUntil)
+            if (_flashing)
             {
-                _flashing = false;
-                RestoreColors();
+                float elapsed = Time.unscaledTime - _flashStart;
+                float amount = _flashPeak * (1f - Mathf.Clamp01((elapsed - _flashHold) / _flashFade));
+                if (amount > 0f) ApplyFlash(amount);
+                else
+                {
+                    _flashing = false;
+                    RestoreColors();
+                }
             }
 
             if (_squashTarget == null)
@@ -181,11 +199,6 @@ namespace Roglike.Combat
         {
             SpriteRenderer renderer = _renderers[index];
             return renderer != null && renderer.sharedMaterial != null && renderer.sharedMaterial.HasProperty(FlashAmountId);
-        }
-
-        private void SetFlashAmount(int index, float amount)
-        {
-            SetOverlay(index, _flashColor, amount);
         }
 
         private void ApplyTint(int index)

@@ -278,7 +278,9 @@ MonoBehaviour:
   - {fileID: 4528767443153701238}
   _squashTarget: {fileID: 3530786228912494611}
   _flashColor: {r: 1, g: 1, b: 1, a: 1}
-  _flashDuration: 0.08
+  _flashPeak: 0.85
+  _flashHold: 0.02
+  _flashFade: 0.07
   _squashAmount: 0.25
   _squashDuration: 0.14
   _maxTint: 0.55

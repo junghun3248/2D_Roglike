@@ -17,6 +17,14 @@ namespace Roglike.Player
         [SerializeField] private Color _sparkColor = Color.white;
         [SerializeField] private Color _critSparkColor = new Color(1f, 0.8f, 0.25f);
         [SerializeField] private float _critHitStopMultiplier = 1.4f;
+        [SerializeField] private float _critPunchZoom = 0.94f;
+        [SerializeField] private float _directionalKick = 0.12f;
+        [SerializeField] private float _sparkSpread = 0.65f;
+        [SerializeField] private float _sparkSize = 0.22f;
+        [SerializeField] private Vector2 _impactSize = new Vector2(1.3f, 1.3f);
+        [SerializeField] private float _impactDuration = 0.1f;
+        [SerializeField] private float _critImpactScale = 1.25f;
+        private PlayerController _controller;
         [SerializeField] private float _overdrivePunchZoom = 0.72f;
         [SerializeField] private float _finisherPunchZoom = 0.85f;
         [SerializeField] private float _killPunchZoom = 0.62f;
@@ -38,11 +46,12 @@ namespace Roglike.Player
         private void Awake()
         {
             _stats = GetComponent<PlayerStats>();
+            _controller = GetComponent<PlayerController>();
             _overdrive = GetComponent<OverdriveController>();
         }
 
         public bool TryHit(Health target, Collider2D hitCollider, Vector2 origin,
-            in HitSpec spec, ref bool feedbackPlayed)
+            in HitSpec spec, ref bool feedbackPlayed, Vector2 swingDirection = default)
         {
             if (target == null || hitCollider == null || target.IsDead
                 || target.Team == Team.Player || target.IsInvulnerable) return false;
@@ -60,12 +69,17 @@ namespace Roglike.Player
             if (!target.TryApplyDamage(info)) return false;
 
             HitSpark.Spawn(point, isCritical ? _critSparkColor : _sparkColor,
-                isCritical ? _critSparkCount : _sparkCount, isCritical ? _critSparkSpeed : _sparkSpeed);
-            OnHitLanded(info, target, spec, ref feedbackPlayed);
+                isCritical ? _critSparkCount : _sparkCount, isCritical ? _critSparkSpeed : _sparkSpeed,
+                _sparkSize, Vector2.right * (_controller != null ? _controller.Facing : 1f), _sparkSpread);
+            Vector2 direction = swingDirection == Vector2.zero ? spec.Knockback.normalized : swingDirection.normalized;
+            float angle = Mathf.Atan2(direction.y, direction.x) * Mathf.Rad2Deg;
+            SlashEffect.SpawnAnimation(VfxSprites.ImpactAnimation, point,
+                _impactSize * (isCritical ? _critImpactScale : 1f), angle, Color.white, _impactDuration);
+            OnHitLanded(info, target, spec, ref feedbackPlayed, swingDirection);
             return true;
         }
 
-        private void OnHitLanded(DamageInfo info, Health target, in HitSpec spec, ref bool feedbackPlayed)
+        private void OnHitLanded(DamageInfo info, Health target, in HitSpec spec, ref bool feedbackPlayed, Vector2 swingDirection)
         {
             bool overdriveActive = _overdrive != null && _overdrive.IsActive;
             _overdrive?.AddGauge(spec.OverdriveGain);
@@ -76,6 +90,9 @@ namespace Roglike.Player
                 feedbackPlayed = true;
                 float hitStop = spec.HitStop * (info.IsCritical ? _critHitStopMultiplier : 1f);
                 TimeController.Instance?.HitStop(hitStop);
+                SfxPlayer.Instance?.Play(target.IsDead ? "kill" : info.IsCritical ? "hit_crit" : "hit");
+                Vector2 direction = swingDirection == Vector2.zero ? spec.Knockback.normalized : swingDirection.normalized;
+                GameCamera.Instance?.Impulse(direction * _directionalKick);
                 GameCamera.Instance?.Shake(spec.Shake * (info.IsCritical ? _critShakeMultiplier : 1f));
 
                 if (overdriveActive)
@@ -86,6 +103,8 @@ namespace Roglike.Player
                 {
                     GameCamera.Instance?.PunchZoom(info.Point, _finisherPunchZoom, _punchDuration * _finisherPunchDurationMultiplier);
                 }
+                else if (info.IsCritical)
+                    GameCamera.Instance?.PunchZoom(info.Point, _critPunchZoom, _punchDuration);
             }
 
             if (target.IsDead && (spec.IsFinisher || overdriveActive))

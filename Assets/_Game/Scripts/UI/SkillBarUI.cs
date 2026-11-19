@@ -24,6 +24,8 @@ namespace Roglike.UI
 
         private readonly RectTransform[] _frames = new RectTransform[SlotCount];
         private readonly Image[] _colors = new Image[SlotCount];
+        private readonly Image[] _icons = new Image[SlotCount];
+        private readonly Color[] _rimColors = new Color[SlotCount];
         private readonly Image[] _overlays = new Image[SlotCount];
         private RectTransform _root;
         private readonly Text[] _names = new Text[SlotCount];
@@ -52,11 +54,16 @@ namespace Roglike.UI
                 UiFactory.Stretch(background.rectTransform);
                 background.rectTransform.offsetMin = Vector2.one * _frameWidth;
                 background.rectTransform.offsetMax = -Vector2.one * _frameWidth;
+                background.gameObject.AddComponent<Mask>().showMaskGraphic = true;
+                _icons[i] = UiFactory.CreateIcon("Icon", background.transform, null, Color.clear);
+                UiFactory.Stretch(_icons[i].rectTransform);
                 _names[i] = UiFactory.CreateText("Name", frame, _shortNameFontSize, Color.white, TextAnchor.MiddleCenter);
                 UiFactory.Stretch(_names[i].rectTransform);
                 _names[i].rectTransform.offsetMin = new Vector2(-5f, 72f);
                 _names[i].rectTransform.offsetMax = new Vector2(5f, 24f);
                 Image overlay = UiFactory.CreateRadialFill("Cooldown", frame, _cooldownColor);
+                overlay.rectTransform.offsetMin = Vector2.one * _frameWidth;
+                overlay.rectTransform.offsetMax = -Vector2.one * _frameWidth;
                 _overlays[i] = overlay;
                 _timers[i] = UiFactory.CreateText("Remaining", frame, _timerFontSize, Color.white, TextAnchor.MiddleCenter);
                 UiFactory.Stretch(_timers[i].rectTransform);
@@ -97,6 +104,10 @@ namespace Roglike.UI
             {
                 SkillDefinition skill = _skills != null && _skills.Slots != null && i < _skills.Slots.Count ? _skills.Slots[i] : null;
                 _colors[i].color = skill != null ? skill.Color : _emptyColor;
+                _rimColors[i] = _colors[i].color;
+                _icons[i].sprite = skill != null ? skill.Icon : null;
+                _icons[i].enabled = _icons[i].sprite != null;
+                _icons[i].color = Color.white;
                 _names[i].text = skill != null ? skill.ShortName : string.Empty;
                 if (skill != null) maxSeconds = Mathf.Max(maxSeconds, skill.Cooldown, _skills.CooldownRemaining(i));
             }
@@ -117,6 +128,7 @@ namespace Roglike.UI
                 _wasReady[i] = ready;
                 _popRemaining[i] = Mathf.Max(0f, _popRemaining[i] - Time.unscaledDeltaTime);
                 float pop = _popDuration > 0f ? _popRemaining[i] / _popDuration : 0f;
+                _colors[i].color = Color.Lerp(_rimColors[i], UiTheme.ReadyFlash, pop);
                 _frames[i].localScale = Vector3.one * (1f + _popScale * Mathf.Sin(pop * Mathf.PI));
                 _overlays[i].fillAmount = equipped ? _skills.CooldownNormalized(i) : 1f;
                 _timers[i].text = remaining <= 0f ? string.Empty : remaining < 1f

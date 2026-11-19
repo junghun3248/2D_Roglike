@@ -52,16 +52,29 @@ namespace Roglike.EditorTools
         {
             string path = $"{Folder}/{tag}.asset";
             SynergyData existing = AssetDatabase.LoadAssetAtPath<SynergyData>(path);
-            if (existing != null) return existing;
+            if (existing != null)
+            {
+                AssignIcon(existing);
+                return existing;
+            }
             var synergy = ScriptableObject.CreateInstance<SynergyData>();
             synergy.tag = tag;
             synergy.displayName = displayName;
             synergy.color = color;
             synergy.tiers = tiers;
+            AssignIcon(synergy);
             AssetDatabase.CreateAsset(synergy, path);
             AssetDatabase.SaveAssets();
             AssetDatabase.ImportAsset(path, ImportAssetOptions.ForceSynchronousImport);
             return AssetDatabase.LoadAssetAtPath<SynergyData>(path);
+        }
+
+        private static void AssignIcon(SynergyData synergy)
+        {
+            var serialized = new SerializedObject(synergy);
+            serialized.FindProperty("_icon").objectReferenceValue = AssetDatabase.LoadAssetAtPath<Sprite>(
+                $"Assets/_Game/Art/Generated/ui/synergy_{synergy.tag}.png");
+            serialized.ApplyModifiedPropertiesWithoutUndo();
         }
 
         private static void EnsureFolder(string path)

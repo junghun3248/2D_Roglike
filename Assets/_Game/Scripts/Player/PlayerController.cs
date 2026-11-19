@@ -40,6 +40,13 @@ namespace Roglike.Player
         [Header("Attack Motion")]
         [SerializeField] private float _attackLungeDecay = 14f;
         [SerializeField] private float _airAttackMaxFallSpeed = 2.5f;
+        [SerializeField] private float _airHitBump = 3f;
+        [SerializeField] private float _hitRecoilDistance = 0.4f;
+        [SerializeField] private float _hitRecoilDuration = 0.08f;
+        private bool _normalAttack;
+        private bool _airHitUsed;
+        private float _recoilRemaining;
+        private float _recoilVelocity;
 
         [Header("Hurt")]
         [SerializeField] private float _hurtInvulnerability = 1f;
@@ -219,8 +226,9 @@ namespace Roglike.Player
         }
 
         /// <summary>공격 시작 시 호출. 전진 속도와 공격 모션 시간(이동 제한)을 준다.</summary>
-        public void BeginAttack(float lungeSpeed, float duration, Vector2 selfVelocity = default, bool keepMomentum = false)
+        public void BeginAttack(float lungeSpeed, float duration, Vector2 selfVelocity = default, bool keepMomentum = false, bool normalAttack = false)
         {
+            _normalAttack = normalAttack;
             IsCharging = false;
             _dashTimer = 0f;
             _keepAttackMomentum = keepMomentum;
@@ -236,8 +244,8 @@ namespace Roglike.Player
                 _jumpCutPending = false;
                 if (selfVelocity.y > 0f) IsGrounded = false;
             }
-            else if (!IsGrounded && _velocity.y < 0f) _velocity.y = 0f;
-            if (selfVelocity != Vector2.zero || keepMomentum || !IsGrounded)
+            else if (!normalAttack && !IsGrounded && _velocity.y < 0f) _velocity.y = 0f;
+            if (selfVelocity != Vector2.zero || keepMomentum || (!IsGrounded && !normalAttack))
             {
                 _rigidbody.linearVelocity = new Vector2(_lungeVelocity, _velocity.y) * TimeController.PlayerTimeMultiplier;
                 _lastMultiplier = TimeController.PlayerTimeMultiplier;
@@ -252,6 +260,24 @@ namespace Roglike.Player
                 _velocity.y = Mathf.Min(0f, _velocity.y);
                 _rigidbody.linearVelocity = _velocity * TimeController.PlayerTimeMultiplier;
                 _lastMultiplier = TimeController.PlayerTimeMultiplier;
+            }
+        }
+
+        public void ApplyNormalHitMotion()
+        {
+            if (IsInSkill || IsHurt || IsDashing) return;
+            if (IsGrounded)
+            {
+                _recoilRemaining = _hitRecoilDuration;
+                _recoilVelocity = -Facing * _hitRecoilDistance / Mathf.Max(0.001f, _hitRecoilDuration);
+            }
+            else if (!_airHitUsed)
+            {
+                _airHitUsed = true;
+                _velocity.y = Mathf.Max(_rigidbody.linearVelocity.y / _lastMultiplier, _airHitBump);
+                _rigidbody.linearVelocity = new Vector2(_rigidbody.linearVelocity.x, _velocity.y * TimeController.PlayerTimeMultiplier);
+                _jumpRising = false;
+                _jumpCutPending = false;
             }
         }
 
@@ -316,6 +342,7 @@ namespace Roglike.Player
 
         public void CancelAttack()
         {
+            _recoilRemaining = 0f;
             IsCharging = false;
             if (IsAttacking)
             {
@@ -336,6 +363,7 @@ namespace Roglike.Player
 
         private void StartDash()
         {
+            SfxPlayer.Instance?.Play("dash");
             if (IsPlunging) EndSkillMotion();
             FaceInputDirection();
             CancelAttack();
@@ -358,9 +386,11 @@ namespace Roglike.Player
             Vector2 size = new Vector2(bounds.size.x * 0.9f, 0.08f);
             bool grounded = _velocity.y <= 0.01f && Physics2D.OverlapBox(center, size, 0f, _groundFilter, _groundHits) > 0;
 
+            if (grounded && !IsGrounded) SfxPlayer.Instance?.Play("land");
             IsGrounded = grounded;
             if (grounded)
             {
+                _airHitUsed = false;
                 _coyoteTimer = _coyoteTime;
                 _jumpsLeft = _extraJumps;
                 _airDashUsed = false;
@@ -385,7 +415,14 @@ namespace Roglike.Player
                 return;
             }
 
-            if (IsAttacking)
+            if (_recoilRemaining > 0f && IsGrounded)
+            {
+                _velocity.x = _recoilVelocity * Mathf.Min(dt, _recoilRemaining) / dt;
+                _recoilRemaining = Mathf.Max(0f, _recoilRemaining - dt);
+                return;
+            }
+
+            if (IsAttacking && (IsGrounded || !_normalAttack))
             {
                 if (!_keepAttackMomentum) _lungeVelocity *= Mathf.Exp(-_attackLungeDecay * dt);
                 _velocity.x = _lungeVelocity;
@@ -393,7 +430,7 @@ namespace Roglike.Player
             }
 
             float input = _input.MoveX;
-            if (Mathf.Abs(input) > 0.2f)
+            if (!IsAttacking && Mathf.Abs(input) > 0.2f)
             {
                 Facing = Mathf.Sign(input);
             }
@@ -425,6 +462,8 @@ namespace Roglike.Player
 
             CancelAttack();
             _velocity.y = _jumpVelocity;
+            _airHitUsed = false;
+            SfxPlayer.Instance?.Play("jump");
             _jumpBufferTimer = 0f;
             _coyoteTimer = 0f;
             _jumpCutPending = false;
@@ -457,7 +496,7 @@ namespace Roglike.Player
             float gravity = _velocity.y < 0f ? _gravity * _fallGravityMultiplier : _gravity;
             _velocity.y -= gravity * dt;
 
-            float maxFall = IsCharging ? _chargeMaxFallSpeed : IsAttacking ? _airAttackMaxFallSpeed : _maxFallSpeed;
+            float maxFall = IsCharging ? _chargeMaxFallSpeed : IsAttacking && !_normalAttack ? _airAttackMaxFallSpeed : _maxFallSpeed;
             _velocity.y = Mathf.Max(_velocity.y, -maxFall);
         }
 
@@ -473,6 +512,7 @@ namespace Roglike.Player
             CancelAttack();
             _dashTimer = 0f;
             _hurtTimer = Mathf.Max(0.25f, info.HitStun);
+            SfxPlayer.Instance?.Play("player_hurt");
             _velocity = info.Knockback;
             _rigidbody.linearVelocity = _velocity * TimeController.PlayerTimeMultiplier;
             _lastMultiplier = TimeController.PlayerTimeMultiplier;

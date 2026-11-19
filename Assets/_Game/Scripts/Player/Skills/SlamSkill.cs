@@ -49,7 +49,7 @@ namespace Roglike.Player.Skills
                 var spec = MakeHit(new Vector2(_knockback.x * direction, _knockback.y), _hitStun, true);
                 if (context.HitResolver.TryHit(target, collider, center, spec, ref feedback)) hit.Add(target);
             }
-            SlashEffect.Spawn(center, _slashSize, 0f, Color, _visualDuration);
+            SlashEffect.SpawnAnimation(VfxSprites.SlamAnimation, center, _slashSize, 0f, Color, _visualDuration);
         }
     }
 }
